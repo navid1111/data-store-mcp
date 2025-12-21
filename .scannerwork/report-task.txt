@@ -1,0 +1,6 @@
+projectKey=navid:data-store-mcp
+serverUrl=http://localhost:9000
+serverVersion=25.2.0.102705
+dashboardUrl=http://localhost:9000/dashboard?id=navid%3Adata-store-mcp
+ceTaskId=6e03288b-a654-4889-90bb-da95a04a776c
+ceTaskUrl=http://localhost:9000/api/ce/task?id=6e03288b-a654-4889-90bb-da95a04a776c
