@@ -2,7 +2,7 @@
 
 /**
  * data-store-mcp - MCP Server
- * data-store-mcp - MCP server
+ * MCP server with database support
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -74,7 +74,7 @@ async function main() {
   await server.connect(transport);
   
   // eslint-disable-next-line no-console
-  console.error('data-store-mcp MCP server running on stdio');
+  console.error('data-store-mcp MCP server running on stdio with database support');
 }
 
 main().catch((error) => {
