@@ -18,6 +18,7 @@ export const queryDatabaseTool = {
             },
             params: {
                 type: 'array',
+                items: {},
                 description: 'Optional parameters for the query',
             },
         },
