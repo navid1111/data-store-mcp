@@ -110,7 +110,21 @@ data-store-mcp/
 ├── tsconfig.json
 └── README.md
 ```
+## vscode/mcp.json
+```
+{
+	"servers": {
+		"my-mcp-server-e461acfb": {
+			"type": "stdio",
+			"command": "node",
+			"args": ["/home/navid-kamal/datastore-mcp/data-store-mcp/dist/server.js"]
+		}
+	},
+	"inputs": []
+}
+```
 
 ## License
 
 MIT
+
