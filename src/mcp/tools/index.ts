@@ -6,6 +6,7 @@
 import { echoTool } from './echo.js';
 import { connectDatabaseTool } from './connect.js';
 import { queryDatabaseTool } from './query.js';
+import { inspectDatabaseTool } from './inspector.js';
 
 export interface Tool {
   name: string;
@@ -22,4 +23,5 @@ export const tools: Record<string, Tool> = {
   [echoTool.name]: echoTool,
   [connectDatabaseTool.name]: connectDatabaseTool,
   [queryDatabaseTool.name]: queryDatabaseTool,
+  [inspectDatabaseTool.name]: inspectDatabaseTool,
 };

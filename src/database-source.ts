@@ -1,6 +1,6 @@
 
 
-export type DatabaseType = "mysql" | "postgres";
+export type DatabaseType = "mysql" | "postgres" | "sqlserver";
 
 export interface ConnectionConfig {
     id: string;
@@ -18,6 +18,14 @@ export interface QueryPayload {
 }
 
 
+export interface TableRelation {
+    childTable: string;
+    childColumn: string;
+    constraintName: string;
+    parentTable: string;
+    parentColumn: string;
+}
+
 export abstract class Database {
     config: ConnectionConfig;
     constructor(config: ConnectionConfig) {
@@ -27,4 +35,5 @@ export abstract class Database {
 
     abstract query(sql: string, params?: any): Promise<any>;
     abstract getSchema(tableName?: string): Promise<any>;
+    abstract getRelations(databaseName?: string): Promise<TableRelation[]>;
 }
