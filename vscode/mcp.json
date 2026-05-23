@@ -1,0 +1,10 @@
+{
+	"servers": {
+		"my-mcp-server-e461acfb": {
+			"type": "stdio",
+			"command": "node",
+			"args": ["E:/im/admin/data-store-mcp/dist/server.js"]
+		}
+	},
+	"inputs": []
+}

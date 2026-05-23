@@ -4,7 +4,7 @@ import { ConnectionManager } from '../../connection-utils.js';
 
 export const queryDatabaseTool = {
     name: 'query_database',
-    description: 'Execute a SQL query on a connected database',
+    description: 'Inspect structure, then execute a SQL query or read-only MongoDB query on a connected database',
     inputSchema: {
         type: 'object',
         properties: {
@@ -14,20 +14,25 @@ export const queryDatabaseTool = {
             },
             sql: {
                 type: 'string',
-                description: 'The SQL query to execute',
+                description: 'The SQL query to execute, or a MongoDB query JSON string',
+            },
+            query: {
+                type: 'object',
+                description: 'MongoDB query object for find, findOne, aggregate, countDocuments, or distinct',
             },
             params: {
                 type: 'array',
                 items: {},
-                description: 'Optional parameters for the query',
+                description: 'Optional SQL parameters',
             },
         },
-        required: ['connectionId', 'sql'],
+        required: ['connectionId'],
     },
     handler: async (args: unknown) => {
         const schema = z.object({
             connectionId: z.string(),
-            sql: z.string(),
+            sql: z.string().optional(),
+            query: z.record(z.any()).optional(),
             params: z.array(z.any()).optional(),
         });
 
@@ -38,10 +43,45 @@ export const queryDatabaseTool = {
             throw new Error(`Connection not found: ${parsed.connectionId}`);
         }
 
-        const results = await db.query(parsed.sql, parsed.params);
+        if (db.config.type !== 'mongodb' && !parsed.sql) {
+            throw new Error('SQL connections require sql');
+        }
+
+        if (db.config.type === 'mongodb') {
+            const mongoQuery = getMongoQueryPayload(parsed.sql, parsed.query);
+            const structure = await db.getSchema(mongoQuery.collection);
+            const results = await db.query(parsed.sql || '{}', parsed.query);
+
+            return {
+                connectionId: parsed.connectionId,
+                type: db.config.type,
+                database: db.config.options.database,
+                structure,
+                query: mongoQuery,
+                results,
+            };
+        }
+
+        const results = await db.query(parsed.sql || '', parsed.params);
 
         return {
+            connectionId: parsed.connectionId,
+            type: db.config.type,
             results,
         };
     },
 };
+
+function getMongoQueryPayload(sql?: string, query?: Record<string, unknown>): Record<string, any> {
+    const payload = query || (sql ? JSON.parse(sql) : undefined);
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new Error('MongoDB queries require a query object or JSON object string');
+    }
+
+    if (typeof payload.collection !== 'string' || !payload.collection) {
+        throw new Error('MongoDB queries require collection');
+    }
+
+    return payload;
+}
