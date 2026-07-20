@@ -20,6 +20,8 @@ import { assertReadOnly } from './read-only.js';
 import { applyRowLimit, type LimitOptions } from './limit.js';
 import { createQueryPlan, type QueryPlan } from './plan.js';
 import { parseError } from './errors.js';
+import { injectRowPolicies } from './rlac.js';
+import type { ResolvedPolicy } from './policy.js';
 
 const PARSER_DIALECT: Record<Dialect, string> = {
     postgres: 'postgresql',
@@ -30,6 +32,8 @@ export interface GateOptions extends LimitOptions {
     dialect: Dialect;
     /** Bound parameters supplied by the caller; carried onto the plan. */
     params?: readonly unknown[];
+    /** Host-resolved row policy. Agent/tool input must never construct this. */
+    policy?: ResolvedPolicy;
 }
 
 /**
@@ -44,6 +48,12 @@ export function buildPlan(sql: string, options: GateOptions): QueryPlan {
     assertReadOnly(parsed);
 
     const [statement] = parsed.statements;
+    const rowPolicy = injectRowPolicies(
+        statement,
+        options.dialect,
+        options.policy,
+        options.params,
+    );
     const appliedLimit = applyRowLimit(statement, options);
 
     const parser = new Parser();
@@ -62,10 +72,14 @@ export function buildPlan(sql: string, options: GateOptions): QueryPlan {
 
     return createQueryPlan({
         sql: rewritten,
-        params: options.params,
+        params: rowPolicy.params,
         dialect: options.dialect,
         appliedLimit,
-        appliedPolicies: [`limit:${appliedLimit}`, 'read-only'],
+        appliedPolicies: [
+            `limit:${appliedLimit}`,
+            'read-only',
+            ...rowPolicy.appliedPolicies,
+        ],
     });
 }
 
