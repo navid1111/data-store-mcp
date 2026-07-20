@@ -3,6 +3,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { parseMdlYaml } from './schema.js';
+import { resolveJoinPath, type JoinPath } from './joinpath.js';
 import type {
     Cube,
     MdlDocument,
@@ -51,6 +52,10 @@ export class SemanticRegistry {
     /** Map lookup is intentionally case-sensitive and O(1). */
     getMetric(name: string): Metric | undefined {
         return this.metricsByName.get(name);
+    }
+
+    findJoinPath(fromModel: string, toModel: string): JoinPath {
+        return resolveJoinPath(this.document, fromModel, toModel);
     }
 }
 
