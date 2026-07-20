@@ -68,18 +68,26 @@ describe('invariant 1: no tool passes a string to a driver', () => {
     expect(toolFiles.length).toBeGreaterThan(0);
   });
 
-  // GAP B2: query_database still passes agent-authored SQL straight to the
-  // driver. The gate exists (1.1–1.3) but is not yet wired in; task 1.5 routes
-  // the tool through it, at which point this test must fail and be replaced by
-  // the todo below.
-  const offenders = () =>
-    toolFiles
+  // query() takes a string and applies no governance; it exists for
+  // internally-generated introspection SQL only. A tool reaching it with
+  // agent input would be an ungoverned path to the driver.
+  //
+  // MongoDB is the one remaining caller: it has no SQL surface, so it cannot
+  // use a QueryPlan until task 1.8 gives it its own gate. Pinned by name
+  // rather than allowed by pattern, so a second offender fails the test.
+  it('finds no tool calling the raw query() path except the documented Mongo case', () => {
+    const offenders = toolFiles
       .filter((f) => /\bdb\.query\s*\(|\bdatabase\.query\s*\(/.test(f.text))
       .map((f) => f.path);
 
-  it('GAP B2: query_database reaches the driver without governance', () => {
-    expect(offenders()).toEqual([join('mcp', 'tools', 'query.ts')]);
+    expect(offenders).toEqual([join('mcp', 'tools', 'query.ts')]);
   });
 
-  it.todo('after 1.5: no tool calls the raw query() path');
+  it('routes SQL sources through the gate', () => {
+    const queryTool = toolFiles.find((f) => f.path.endsWith(join('tools', 'query.ts')))!;
+    expect(queryTool.text).toMatch(/buildPlan\(/);
+    expect(queryTool.text).toMatch(/db\.execute\(/);
+  });
+
+  it.todo('after 1.8: Mongo goes through its own gate and no tool calls query()');
 });

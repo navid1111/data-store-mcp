@@ -102,11 +102,11 @@ unbounded query, and no credential passes through the model.
 
 | ID | Task | Spec | Depends |
 |---|---|---|---|
-| 1.1 | Add `node-sql-parser`; `governance/parse.ts` (SQL → AST, per-dialect) | R2.1 | 0.1 |
-| 1.2 | Structured error taxonomy `governance/errors.ts` | R2.2 | — |
-| 1.3 | Read-only assertion: reject non-`SELECT` roots + multi-statement payloads | R1.2 | 1.1 |
-| 1.4 | Branded `QueryPlan` type; `execute(plan)` replaces `query(sql)` on adapters | arch §5 | 0.4 |
-| 1.5 | Limit injection into AST (respect smaller user limit); hard server ceiling | R1.1 | 1.1, 1.4 |
+| 1.1 | Add `node-sql-parser`; `governance/parse.ts` (SQL → AST, per-dialect) | R2.1 | 0.1 **done** |
+| 1.2 | Structured error taxonomy `governance/errors.ts` | R2.2 | — **done** |
+| 1.3 | Read-only assertion: reject non-`SELECT` roots + multi-statement payloads | R1.2 | 1.1 **done** |
+| 1.4 | Branded `QueryPlan` type; `execute(plan)` replaces `query(sql)` on adapters | arch §5 | 0.4 **done** |
+| 1.5 | Limit injection into AST (respect smaller user limit); hard server ceiling | R1.1 | 1.1, 1.4 **done** |
 | 1.6 | Timeout with real driver-level cancellation | R1.3 | 1.4 |
 | 1.7 | Parameter binding — literals bound, never interpolated | R8.6 | 1.1 |
 | 1.8 | Mongo gate: read-only ops, forced `$limit`, pipeline-stage cap | R1.6 | 1.4 |

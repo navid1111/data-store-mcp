@@ -265,20 +265,73 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       ).rejects.toThrow(/Unknown tool/);
     });
 
-    // GAP (spec B2): the tool layer applies no row limit and no read-only
-    // guard. This is the Phase 1 hole, demonstrated through the real MCP
-    // surface rather than argued from the source.
-    it('GAP B2: executes an unbounded SELECT with no row cap', async () => {
+    // T1.5 — GAP B2 closed: agent SQL now goes through the governance gate.
+    it('caps an unbounded SELECT at the configured limit', async () => {
       const res = payload(
         await client.callTool({
           name: 'query_database',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film' },
         })
       );
-      expect(res.results.length).toBe(EXPECTED.film); // all 1000 rows reach the agent
+      expect(res.results.length).toBe(1000);
+      expect(res.appliedLimit).toBe(1000);
+      expect(res.appliedPolicies).toContain('read-only');
     });
 
-    it.todo('after 1.5: caps result rows at the configured limit');
-    it.todo('after 1.3: refuses INSERT/UPDATE/DELETE/DROP with E_WRITE_FORBIDDEN');
+    it('preserves a caller limit smaller than the default', async () => {
+      const res = payload(
+        await client.callTool({
+          name: 'query_database',
+          arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film LIMIT 3' },
+        })
+      );
+      expect(res.results).toHaveLength(3);
+      expect(res.appliedLimit).toBe(3);
+    });
+
+    // T1.3 through the real MCP surface, with the fixture checked afterwards:
+    // a refusal that still executed would show up as a changed row count.
+    it.each([
+      ['DROP TABLE film'],
+      ['DELETE FROM film'],
+      ['UPDATE film SET title = $$x$$'],
+      ['INSERT INTO film (title) VALUES ($$x$$)'],
+      ['TRUNCATE TABLE film'],
+    ])('refuses %s', async (sql) => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql },
+      });
+      expect(res.isError).toBe(true);
+    });
+
+    it('refuses a data-modifying CTE that parses as a SELECT', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: 'WITH x AS (DELETE FROM film RETURNING *) SELECT * FROM x',
+        },
+      });
+      expect(res.isError).toBe(true);
+    });
+
+    it('refuses a multi-statement payload', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS n; DROP TABLE film' },
+      });
+      expect(res.isError).toBe(true);
+    });
+
+    it('leaves the fixture intact after every refusal', async () => {
+      const res = payload(
+        await client.callTool({
+          name: 'query_database',
+          arguments: { connectionId: 'e2e-pagila', sql: 'SELECT count(*)::int AS n FROM film' },
+        })
+      );
+      expect(res.results[0].n).toBe(EXPECTED.film);
+    });
   });
 });

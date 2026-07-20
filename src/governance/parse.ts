@@ -7,7 +7,11 @@
  * table'` is a legitimate read — which is why this module exists at all.
  */
 
-import { Parser } from 'node-sql-parser';
+// node-sql-parser is CommonJS. A named import works under Vitest's transform
+// but throws "Named export 'Parser' not found" in real Node ESM, which crashes
+// the built server on startup — caught only by the e2e suite.
+import sqlParser from 'node-sql-parser';
+const { Parser } = sqlParser;
 import { parseError, type SourceLocation } from './errors.js';
 
 /**

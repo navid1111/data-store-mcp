@@ -1,6 +1,7 @@
 
 import { z } from 'zod';
 import { ConnectionManager } from '../../connection-utils.js';
+import { buildPlan, dialectFor } from '../../governance/gate.js';
 
 export const queryDatabaseTool = {
     name: 'query_database',
@@ -48,6 +49,8 @@ export const queryDatabaseTool = {
         }
 
         if (db.config.type === 'mongodb') {
+            // Ungoverned until task 1.8 adds the Mongo gate (read-only ops,
+            // forced $limit, pipeline-stage cap).
             const mongoQuery = getMongoQueryPayload(parsed.sql, parsed.query);
             const structure = await db.getSchema(mongoQuery.collection);
             const results = await db.query(parsed.sql || '{}', parsed.query);
@@ -62,11 +65,21 @@ export const queryDatabaseTool = {
             };
         }
 
-        const results = await db.query(parsed.sql || '', parsed.params);
+        // Agent SQL never reaches the driver directly: the gate parses it,
+        // refuses writes, and injects a row limit, yielding a QueryPlan —
+        // the only thing execute() accepts.
+        const plan = buildPlan(parsed.sql || '', {
+            dialect: dialectFor(db.config.type),
+            params: parsed.params,
+        });
+
+        const results = await db.execute(plan);
 
         return {
             connectionId: parsed.connectionId,
             type: db.config.type,
+            appliedLimit: plan.appliedLimit,
+            appliedPolicies: plan.appliedPolicies,
             results,
         };
     },
