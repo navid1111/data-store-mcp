@@ -130,7 +130,7 @@ loudly with hints.
 
 | ID | Task | Spec | Depends |
 |---|---|---|---|
-| 2.1 | MDL types + YAML schema: model, column, relationship, metric, view, cube | R3.2 | — |
+| 2.1 | MDL types + YAML schema: model, column, relationship, metric, view, cube | R3.2 | — **done** |
 | 2.2 | `semantic/registry.ts` — load, validate, index MDL; `provenance`/`verified` fields | R3.1, R3.6 | 2.1 |
 | 2.3 | Join-path resolution over the relationship graph | R3.4 | 2.2 |
 | 2.4 | MDL → SQL compiler, Postgres + MySQL dialects | R3.4, R2.3 | 2.3, 1.5 |
