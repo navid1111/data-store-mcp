@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { ConnectionConfig } from '../database-source.js';
+import type { ExecuteOptions } from '../governance/plan.js';
 
 export const CONFIG_PATH_ENV = 'DATA_STORE_MCP_CONFIG';
 
@@ -41,10 +42,14 @@ const sourceSchema = z.discriminatedUnion('type', [
 
 const configSchema = z.object({
     sources: z.array(sourceSchema).min(1),
+    limits: z.object({
+        maxResultBytes: z.number().int().positive().optional(),
+    }).strict().optional(),
 }).strict();
 
 export interface AppConfig {
     sources: ConnectionConfig[];
+    execution: ExecuteOptions;
 }
 
 /**
@@ -113,7 +118,14 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
         }
     });
 
-    return { sources };
+    return {
+        sources,
+        execution: {
+            ...(parsed.limits?.maxResultBytes !== undefined
+                ? { maxBytes: parsed.limits.maxResultBytes }
+                : {}),
+        },
+    };
 }
 
 function interpolateEnvironment(value: unknown, env: NodeJS.ProcessEnv): unknown {

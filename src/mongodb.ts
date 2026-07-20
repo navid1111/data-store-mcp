@@ -12,6 +12,11 @@ import {
     buildMongoPlan,
     type MongoQueryPlan,
 } from "./governance/mongo.js";
+import {
+    enforceValueByteLimit,
+    ResultByteAccumulator,
+    resolveMaxBytes,
+} from "./execution/result-size.js";
 
 /** How many documents to sample when inferring a collection's fields. */
 const SAMPLE_SIZE = 100;
@@ -58,35 +63,47 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
         return this.execute(plan);
     }
 
-    async execute(plan: MongoQueryPlan, _options?: ExecuteOptions): Promise<unknown> {
+    async execute(plan: MongoQueryPlan, options?: ExecuteOptions): Promise<unknown> {
         const payload = plan.payload;
         const db = this.requireDb();
         const collection = db.collection(payload.collection);
+        const maxBytes = resolveMaxBytes(options);
 
         switch (payload.operation) {
             case "find":
-                return collection
-                    .find(payload.filter || {}, {
+                return collectCursor(
+                    collection.find(payload.filter || {}, {
                         projection: payload.projection,
                         sort: payload.sort,
                         limit: payload.limit,
                         skip: payload.skip,
-                    })
-                    .toArray();
-            case "findOne":
-                return collection.findOne(payload.filter || {}, {
+                    }),
+                    maxBytes,
+                );
+            case "findOne": {
+                const result = await collection.findOne(payload.filter || {}, {
                     projection: payload.projection,
                     sort: payload.sort,
                 });
+                return enforceValueByteLimit(result, maxBytes);
+            }
             case "aggregate":
-                return collection.aggregate([...(payload.pipeline || [])]).toArray();
-            case "countDocuments":
-                return collection.countDocuments(payload.filter || {});
+                return collectCursor(
+                    collection.aggregate([...(payload.pipeline || [])]),
+                    maxBytes,
+                );
+            case "countDocuments": {
+                const result = await collection.countDocuments(payload.filter || {});
+                return enforceValueByteLimit(result, maxBytes);
+            }
             case "distinct":
                 if (!payload.field) {
                     throw new Error("MongoDB distinct queries require a field");
                 }
-                return collection.distinct(payload.field, payload.filter || {});
+                return enforceValueByteLimit(
+                    await collection.distinct(payload.field, payload.filter || {}),
+                    maxBytes,
+                );
             default:
                 throw new Error(`Unsupported MongoDB operation: ${String(payload.operation)}`);
         }
@@ -231,4 +248,19 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
         return [];
     }
 
+}
+
+async function collectCursor<T>(
+    cursor: AsyncIterable<T> & { close(): Promise<void> },
+    maxBytes: number,
+): Promise<T[]> {
+    const rows = new ResultByteAccumulator<T>(maxBytes);
+    try {
+        for await (const row of cursor) rows.add(row);
+        return rows.result();
+    } finally {
+        // On overflow this kills the server cursor before unread documents are
+        // decoded or retained. close() is harmless after normal exhaustion.
+        await cursor.close();
+    }
 }

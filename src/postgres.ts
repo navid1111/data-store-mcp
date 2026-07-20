@@ -5,6 +5,7 @@ import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js
 import { profileSqlColumns } from "./sources/profile-sql.js";
 import { resolveTimeoutMs, type ExecuteOptions, type QueryPlan } from "./governance/plan.js";
 import { timeout as governanceTimeout } from "./governance/errors.js";
+import { ResultByteAccumulator, resolveMaxBytes } from "./execution/result-size.js";
 import pg from 'pg';
 
 /**
@@ -51,16 +52,51 @@ export class PostgresDatabase extends Database<PostgresConnectionConfig, QueryPl
 
     async execute(plan: QueryPlan, options?: ExecuteOptions): Promise<Row[]> {
         const timeoutMs = resolveTimeoutMs(options);
+        const rows = new ResultByteAccumulator<Row>(resolveMaxBytes(options));
 
         // A dedicated client, because statement_timeout is session state: set
         // on the pool it would leak to unrelated queries. Postgres cancels the
         // backend itself, so this is real cancellation rather than an
         // abandoned promise, and the connection stays usable afterwards.
         const client = await this.pool.connect();
+        let released = false;
         try {
             await client.query(`SET statement_timeout = ${timeoutMs}`);
-            const result = await client.query(plan.sql, [...plan.params]);
-            return result.rows;
+            const query = new pg.Query<Row>({
+                text: plan.sql,
+                values: [...plan.params],
+            });
+
+            return await new Promise<Row[]>((resolve, reject) => {
+                let settled = false;
+
+                const fail = (error: unknown) => {
+                    if (settled) return;
+                    settled = true;
+                    reject(error);
+                };
+
+                query.on('row', (row) => {
+                    if (settled) return;
+                    try {
+                        rows.add(row);
+                    } catch (error) {
+                        // Destroying the dedicated client stops the backend and
+                        // prevents the remaining rows from crossing into Node.
+                        released = true;
+                        client.release(true);
+                        fail(error);
+                    }
+                });
+                query.on('error', fail);
+                query.on('end', () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve(rows.result());
+                });
+
+                client.query(query);
+            });
         } catch (error) {
             // 57014 = query_canceled
             if ((error as { code?: string })?.code === '57014') {
@@ -68,8 +104,10 @@ export class PostgresDatabase extends Database<PostgresConnectionConfig, QueryPl
             }
             throw error;
         } finally {
-            await client.query('SET statement_timeout = 0').catch(() => undefined);
-            client.release();
+            if (!released) {
+                await client.query('SET statement_timeout = 0').catch(() => undefined);
+                client.release();
+            }
         }
     }
 

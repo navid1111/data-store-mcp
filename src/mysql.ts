@@ -4,18 +4,22 @@ import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sou
 import { assertValidIdentifier, quoteMysqlIdentifier } from "./identifiers.js";
 import { profileSqlColumns } from "./sources/profile-sql.js";
 import { resolveTimeoutMs, type ExecuteOptions, type QueryPlan } from "./governance/plan.js";
-import { timeout as governanceTimeout } from "./governance/errors.js";
+import { isGovernanceError, timeout as governanceTimeout } from "./governance/errors.js";
+import { ResultByteAccumulator, resolveMaxBytes } from "./execution/result-size.js";
 import mysql from 'mysql2/promise';
+import type { Connection as CoreMysqlConnection, RowDataPacket } from 'mysql2';
+
+type StreamableConnection = mysql.Connection & { connection: CoreMysqlConnection };
 
 export class MysqlDatabase extends Database<MysqlConnectionConfig, QueryPlan> {
-  private connection: mysql.Connection | null = null;
+  private connection: StreamableConnection | null = null;
 
   constructor(config: MysqlConnectionConfig) {
     super(config);
   }
 
   async connect(): Promise<void> {
-    this.connection = await mysql.createConnection(this.config.options);
+    this.connection = await mysql.createConnection(this.config.options) as StreamableConnection;
   }
 
   async query(sql: string, params?: unknown[]): Promise<Row[]> {
@@ -32,26 +36,47 @@ export class MysqlDatabase extends Database<MysqlConnectionConfig, QueryPlan> {
     }
 
     const timeoutMs = resolveTimeoutMs(options);
+    const rows = new ResultByteAccumulator<Row>(resolveMaxBytes(options));
+    const activeConnection = this.connection;
 
     // max_execution_time is enforced by the server, so the query is genuinely
     // cancelled and the connection survives. Caveat: MySQL exempts SLEEP()
     // and non-read-only statements from it — the latter cannot reach here
     // because the gate refuses writes, but it does mean this is not a
     // universal wall-clock guarantee the way statement_timeout is.
-    await this.connection.query(`SET SESSION max_execution_time = ${timeoutMs}`);
+    await activeConnection.query(`SET SESSION max_execution_time = ${timeoutMs}`);
     try {
-      const [rows] = await this.connection.execute(plan.sql, [...plan.params]);
-      return rows as Row[];
+      const command = activeConnection.connection.execute<RowDataPacket[]>(
+        plan.sql,
+        [...plan.params],
+      );
+      const stream = command.stream({ highWaterMark: 1 });
+
+      for await (const row of stream) {
+        rows.add(row as Row);
+      }
+      return rows.result();
     } catch (error) {
+      if (isGovernanceError(error) && error.code === 'E_RESULT_TOO_LARGE') {
+        // Ending the socket cancels the active statement immediately. Replace
+        // it before returning so a capped result does not poison the source.
+        activeConnection.destroy();
+        this.connection = null;
+        await this.connect().catch(() => undefined);
+        throw error;
+      }
+
       // 3024 = ER_QUERY_TIMEOUT
       if ((error as { errno?: number })?.errno === 3024) {
         throw governanceTimeout(timeoutMs);
       }
       throw error;
     } finally {
-      await this.connection
-        .query('SET SESSION max_execution_time = 0')
-        .catch(() => undefined);
+      if (this.connection === activeConnection) {
+        await activeConnection
+          .query('SET SESSION max_execution_time = 0')
+          .catch(() => undefined);
+      }
     }
   }
 

@@ -39,7 +39,8 @@ export const queryDatabaseTool = {
         });
 
         const parsed = schema.parse(args);
-        const db = SourceRegistry.getInstance().getSource(parsed.connectionId);
+        const registry = SourceRegistry.getInstance();
+        const db = registry.getSource(parsed.connectionId);
 
         if (!db) {
             throw new Error(`Source not found: ${parsed.connectionId}`);
@@ -52,7 +53,7 @@ export const queryDatabaseTool = {
         if (db.config.type === 'mongodb') {
             const plan = buildMongoPlan(parsed.query ?? parsed.sql);
             const structure = await db.getSchema(plan.payload.collection);
-            const results = await db.execute(plan);
+            const results = await db.execute(plan, registry.getExecutionOptions());
 
             return {
                 connectionId: parsed.connectionId,
@@ -74,7 +75,7 @@ export const queryDatabaseTool = {
             params: parsed.params,
         });
 
-        const results = await db.execute(plan);
+        const results = await db.execute(plan, registry.getExecutionOptions());
 
         return {
             connectionId: parsed.connectionId,

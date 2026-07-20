@@ -39,6 +39,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     writeFileSync(
       configPath,
       JSON.stringify({
+        limits: { maxResultBytes: 4 * 1024 * 1024 },
         sources: [
           {
             name: 'e2e-pagila',
@@ -328,6 +329,21 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       );
       expect(res.results).toHaveLength(3);
       expect(res.appliedLimit).toBe(3);
+    });
+
+    it('returns an error when one row exceeds the configured byte cap', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: `SELECT repeat('x', 5000000) AS payload`,
+        },
+      });
+
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error.message).toMatch(
+        /Result exceeded the 4194304-byte cap \([4-9][0-9]+ bytes\)/,
+      );
     });
 
     // T1.3 through the real MCP surface, with the fixture checked afterwards:

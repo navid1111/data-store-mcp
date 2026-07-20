@@ -154,6 +154,21 @@ describe('MongoDatabase / seeded fixture', () => {
       expect(plan.appliedLimit).toBeNull();
       await expect(db.execute(plan)).resolves.toBe(SEEDED.films);
     });
+
+    it('stops a cursor when its serialized rows cross the byte cap', async () => {
+      const plan = buildMongoPlan({ operation: 'find', collection: 'film' });
+
+      await expect(db.execute(plan, { maxBytes: 100 })).rejects.toMatchObject({
+        code: 'E_RESULT_TOO_LARGE',
+        detail: {
+          limit: 100,
+          actual: expect.any(Number),
+        },
+      });
+
+      const count = buildMongoPlan({ operation: 'countDocuments', collection: 'film' });
+      await expect(db.execute(count, { maxBytes: 100 })).resolves.toBe(SEEDED.films);
+    });
   });
 
   describe('listTables', () => {

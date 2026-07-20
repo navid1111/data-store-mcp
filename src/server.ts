@@ -75,7 +75,7 @@ function createServer(): Server {
  */
 async function main() {
   const config = await loadConfig();
-  await SourceRegistry.initialize(config.sources);
+  await SourceRegistry.initialize(config.sources, config.execution);
 
   const server = createServer();
   const transport = new StdioServerTransport();

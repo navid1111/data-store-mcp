@@ -89,6 +89,6 @@ describe('invariant 1: no tool passes a string to a driver', () => {
   it('routes MongoDB through its gate and branded execute path', () => {
     const queryTool = toolFiles.find((f) => f.path.endsWith(join('tools', 'query.ts')))!;
     expect(queryTool.text).toMatch(/buildMongoPlan\(/);
-    expect(queryTool.text).toMatch(/db\.execute\(plan\)/);
+    expect(queryTool.text).toMatch(/db\.execute\(plan(?:,|\))/);
   });
 });

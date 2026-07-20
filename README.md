@@ -108,6 +108,10 @@ export DATA_STORE_MCP_CONFIG="$PWD/data-store-mcp.config.example.json"
 npm start
 ```
 
+The optional `limits.maxResultBytes` setting caps the exact UTF-8 JSON size of
+query results. PostgreSQL, MySQL, and MongoDB cursors are stopped as soon as the
+cap is crossed, before the remaining result is buffered in Node.
+
 Because the server runs on stdio, it is typically launched by an MCP client rather than manually used in a shell.
 
 ## Example MCP client configuration

@@ -1,4 +1,7 @@
 {
+  "limits": {
+    "maxResultBytes": 10485760
+  },
   "sources": [
     {
       "name": "analytics",

@@ -17,7 +17,7 @@ const postgresSource = {
 describe('parseConfig', () => {
   it('loads typed sources and expands credentials from the environment', () => {
     const config = parseConfig(
-      { sources: [postgresSource] },
+      { sources: [postgresSource], limits: { maxResultBytes: 4096 } },
       { DB_PASSWORD: 'server-side-secret' },
     );
 
@@ -35,6 +35,7 @@ describe('parseConfig', () => {
         },
       },
     ]);
+    expect(config.execution).toEqual({ maxBytes: 4096 });
   });
 
   it('rejects duplicate source names', () => {
