@@ -20,6 +20,8 @@ import { CommandPromptClient } from '../orchestrator/command-client.js';
 import { loadProjectContext } from '../orchestrator/context.js';
 import { HybridMemoryRetriever } from '../memory/retrieval.js';
 import { HashEmbeddingProvider } from '../memory/embedding.js';
+import { loadSkill, listSkillNames } from '../skills/registry.js';
+import { installSkillDiscovery } from '../skills/install.js';
 
 type OptionValue = string | boolean;
 
@@ -38,6 +40,7 @@ Commands:
   mdl bootstrap         Generate a draft MDL artifact from a live source
   ask <question>        Ask through guided or direct prompting
   query --sql <sql>     Execute governed, read-only SQL
+  skills <command>      Retrieve workflow guides or add client discovery
 
 Run "dsm <command> --help" for command-specific options.
 `;
@@ -69,6 +72,20 @@ Options:
   --llm-command <path>  Executable that reads the prompt from stdin and writes a response
   --json                Write the mode and response as machine-readable JSON
 `,
+    skills: `Usage: dsm skills <get|add> [options]
+
+Commands:
+  get <name>            Print a structured workflow guide
+  add --config <path>   Add the data-store-mcp discovery entry to a client config
+`,
+    skillGet: `Usage: dsm skills get <name>
+
+Prints the requested structured Markdown workflow guide to stdout.
+`,
+    skillAdd: `Usage: dsm skills add --config <path> [--command <path>] [--json]
+
+Adds an idempotent data-store-mcp entry under mcpServers without replacing unrelated keys.
+`,
 } as const;
 
 export async function runCli(argv: string[]): Promise<number> {
@@ -87,9 +104,62 @@ export async function runCli(argv: string[]): Promise<number> {
             return runAsk(rest);
         case 'query':
             return runQuery(rest);
+        case 'skills':
+            return runSkills(rest);
         default:
             throw new Error(`Unknown command "${command}". Run "dsm --help" for usage.`);
     }
+}
+
+async function runSkills(argv: string[]): Promise<number> {
+    const [subcommand, ...rest] = argv;
+    if (!subcommand || isHelp(subcommand)) {
+        writeStdout(HELP.skills);
+        return 0;
+    }
+    switch (subcommand) {
+        case 'get':
+            return runSkillGet(rest);
+        case 'add':
+            return runSkillAdd(rest);
+        default: {
+            const available = await listSkillNames();
+            throw new Error(
+                `Unknown skills command "${subcommand}". Available skills: ${available.join(', ')}.`,
+            );
+        }
+    }
+}
+
+async function runSkillGet(argv: string[]): Promise<number> {
+    const parsed = parseArguments(argv);
+    assertKnownOptions(parsed, ['help']);
+    if (hasOption(parsed, 'help')) {
+        writeStdout(HELP.skillGet);
+        return 0;
+    }
+    if (parsed.positionals.length !== 1) {
+        throw new Error('skills get requires exactly one skill name.');
+    }
+    const skill = await loadSkill(parsed.positionals[0]);
+    writeStdout(skill.content.endsWith('\n') ? skill.content : `${skill.content}\n`);
+    return 0;
+}
+
+async function runSkillAdd(argv: string[]): Promise<number> {
+    const parsed = parseArguments(argv);
+    assertKnownOptions(parsed, ['config', 'command', 'json', 'help']);
+    if (hasOption(parsed, 'help')) {
+        writeStdout(HELP.skillAdd);
+        return 0;
+    }
+    rejectPositionals(parsed, 'skills add');
+    const command = optionalString(parsed, 'command');
+    const result = await installSkillDiscovery(requiredString(parsed, 'config'), {
+        ...(command ? { command } : {}),
+    });
+    writeData(result, parsed);
+    return 0;
 }
 
 async function runAsk(argv: string[]): Promise<number> {

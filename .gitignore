@@ -28,6 +28,7 @@ artifacts/
 !test.md
 !instructions.md
 !docs/**/*.md
+!skills/**/*.md
 # Added by code-review-graph
 .code-review-graph/
 graphify-out/
