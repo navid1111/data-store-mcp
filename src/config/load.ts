@@ -42,6 +42,9 @@ const sourceSchema = z.discriminatedUnion('type', [
 
 const configSchema = z.object({
     principal: z.string().min(1),
+    semantic: z.object({
+        path: z.string().min(1),
+    }).strict(),
     audit: z.object({
         path: z.string().min(1),
     }).strict(),
@@ -53,6 +56,7 @@ const configSchema = z.object({
 }).strict();
 
 export interface AppConfig {
+    semanticPath: string;
     audit: {
         path: string;
         principal: string;
@@ -128,6 +132,7 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
     });
 
     return {
+        semanticPath: parsed.semantic.path,
         audit: {
             path: parsed.audit.path,
             principal: parsed.principal,

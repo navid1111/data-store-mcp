@@ -118,6 +118,11 @@ including policy denials, timeouts, byte-cap failures, and database errors. The
 log contains compiled SQL and policy names, but never bound values, error text,
 or configured passwords. `limits.timeoutMs` optionally sets the query timeout.
 
+`semantic.path` points to a directory containing strict `.yml`/`.yaml` MDL
+files. The `dry_plan` tool parses and governs SQL, resolves its tables and
+columns against that registry, and reports unverified-model warnings without
+contacting a database or writing an execution audit record.
+
 Because the server runs on stdio, it is typically launched by an MCP client rather than manually used in a shell.
 
 ## Example MCP client configuration

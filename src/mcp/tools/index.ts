@@ -7,6 +7,7 @@ import { echoTool } from './echo.js';
 import { queryDatabaseTool } from './query.js';
 import { inspectDatabaseTool } from './inspector.js';
 import { listSourcesTool } from './list-sources.js';
+import { dryPlanTool } from './dry-plan.js';
 
 export interface Tool {
   name: string;
@@ -22,6 +23,7 @@ export interface Tool {
 export const tools: Record<string, Tool> = {
   [echoTool.name]: echoTool,
   [listSourcesTool.name]: listSourcesTool,
+  [dryPlanTool.name]: dryPlanTool,
   [queryDatabaseTool.name]: queryDatabaseTool,
   [inspectDatabaseTool.name]: inspectDatabaseTool,
 };

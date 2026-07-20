@@ -38,10 +38,28 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     configDir = mkdtempSync(join(tmpdir(), 'data-store-mcp-e2e-'));
     const configPath = join(configDir, 'config.json');
     auditPath = join(configDir, 'audit.jsonl');
+    const semanticPath = join(configDir, 'semantic.yml');
+    writeFileSync(semanticPath, `models:
+  - name: film
+    description: Film catalog.
+    provenance: introspection
+    source: e2e-pagila
+    table: film
+    columns:
+      - name: film_id
+        description: Film identifier.
+        provenance: introspection
+        dataType: integer
+      - name: title
+        description: Film title.
+        provenance: db_comment
+        dataType: text
+`);
     writeFileSync(
       configPath,
       JSON.stringify({
         principal: 'e2e-analyst',
+        semantic: { path: configDir },
         audit: { path: auditPath },
         limits: { maxResultBytes: 4 * 1024 * 1024, timeoutMs: 750 },
         sources: [
@@ -93,6 +111,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
       expect(names).toEqual([
+        'dry_plan',
         'echo',
         'inspect_database',
         'list_sources',
@@ -449,6 +468,34 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       ]) {
         expect(afterText).not.toContain(password);
       }
+    });
+
+    it('dry_plan resolves MDL without executing or writing an audit record', async () => {
+      const before = auditRecords(auditPath);
+      const res = payload(await client.callTool({
+        name: 'dry_plan',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT title FROM film' },
+      }));
+
+      expect(res.resolvedTables).toEqual(['film']);
+      expect(res.resolvedColumns).toEqual(['film.title']);
+      expect(res.appliedLimit).toBe(1000);
+      expect(res.appliedPolicies).toContain('read-only');
+      expect(res.warnings).toEqual([
+        expect.objectContaining({ code: 'E_UNVERIFIED_MODEL', model: 'film' }),
+      ]);
+      expect(auditRecords(auditPath)).toHaveLength(before.length);
+    });
+
+    it('dry_plan returns structured semantic errors', async () => {
+      const res: any = await client.callTool({
+        name: 'dry_plan',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT titel FROM film' },
+      });
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error).toEqual(
+        expect.objectContaining({ code: 'E_UNKNOWN_COLUMN', didYouMean: ['title'] }),
+      );
     });
   });
 });

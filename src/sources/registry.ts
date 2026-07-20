@@ -6,6 +6,7 @@ import type { AuditLog } from '../audit/log.js';
 import { MongoDatabase } from '../mongodb.js';
 import { MysqlDatabase } from '../mysql.js';
 import { PostgresDatabase } from '../postgres.js';
+import type { SemanticRegistry } from '../semantic/registry.js';
 
 export interface SourceDescriptor {
     name: string;
@@ -18,15 +19,18 @@ export class SourceRegistry {
     private readonly sources: Map<string, Database>;
     private readonly executionOptions: Readonly<ExecuteOptions>;
     private readonly auditLog: AuditLog;
+    private readonly semanticRegistry: SemanticRegistry;
 
     private constructor(
         sources: Map<string, Database>,
         executionOptions: ExecuteOptions,
         auditLog: AuditLog,
+        semanticRegistry: SemanticRegistry,
     ) {
         this.sources = sources;
         this.executionOptions = Object.freeze({ ...executionOptions });
         this.auditLog = auditLog;
+        this.semanticRegistry = semanticRegistry;
     }
 
     /** Connect every configured source before publishing the registry. */
@@ -34,6 +38,7 @@ export class SourceRegistry {
         configs: ConnectionConfig[],
         executionOptions: ExecuteOptions,
         auditLog: AuditLog,
+        semanticRegistry: SemanticRegistry,
     ): Promise<SourceRegistry> {
         const sources = new Map<string, Database>();
 
@@ -47,7 +52,7 @@ export class SourceRegistry {
             sources.set(config.id, database);
         }
 
-        const registry = new SourceRegistry(sources, executionOptions, auditLog);
+        const registry = new SourceRegistry(sources, executionOptions, auditLog, semanticRegistry);
         SourceRegistry.instance = registry;
         return registry;
     }
@@ -69,6 +74,10 @@ export class SourceRegistry {
 
     getAuditLog(): AuditLog {
         return this.auditLog;
+    }
+
+    getSemanticRegistry(): SemanticRegistry {
+        return this.semanticRegistry;
     }
 
     /**

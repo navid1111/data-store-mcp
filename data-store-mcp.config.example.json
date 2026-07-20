@@ -1,5 +1,8 @@
 {
   "principal": "local-analyst",
+  "semantic": {
+    "path": "./semantic"
+  },
   "audit": {
     "path": "./data-store-mcp.audit.jsonl"
   },

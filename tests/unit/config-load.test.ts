@@ -19,6 +19,7 @@ describe('parseConfig', () => {
     const config = parseConfig(
       {
         principal: 'local-analyst',
+        semantic: { path: './semantic' },
         audit: { path: './audit.jsonl' },
         sources: [postgresSource],
         limits: { maxResultBytes: 4096, timeoutMs: 2500 },
@@ -41,6 +42,7 @@ describe('parseConfig', () => {
       },
     ]);
     expect(config.audit).toEqual({ path: './audit.jsonl', principal: 'local-analyst' });
+    expect(config.semanticPath).toBe('./semantic');
     expect(config.execution).toEqual({ maxBytes: 4096, timeoutMs: 2500 });
   });
 
@@ -84,6 +86,7 @@ describe('parseConfig', () => {
 function configWith(overrides: Record<string, unknown>) {
   return {
     principal: 'local-analyst',
+    semantic: { path: './semantic' },
     audit: { path: './audit.jsonl' },
     ...overrides,
   };

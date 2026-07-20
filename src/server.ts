@@ -14,6 +14,7 @@ import { loadConfig } from './config/load.js';
 import { SourceRegistry } from './sources/registry.js';
 import { AuditLog } from './audit/log.js';
 import type { ConnectionConfig } from './database-source.js';
+import { SemanticRegistry } from './semantic/registry.js';
 
 /**
  * Create and configure the MCP server
@@ -81,7 +82,8 @@ async function main() {
     ...config.audit,
     secrets: credentialSecrets(config.sources),
   });
-  await SourceRegistry.initialize(config.sources, config.execution, auditLog);
+  const semanticRegistry = await SemanticRegistry.load(config.semanticPath);
+  await SourceRegistry.initialize(config.sources, config.execution, auditLog, semanticRegistry);
 
   const server = createServer();
   const transport = new StdioServerTransport();

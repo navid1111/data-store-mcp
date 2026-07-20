@@ -135,7 +135,7 @@ loudly with hints.
 | 2.3 | Join-path resolution over the relationship graph | R3.4 | 2.2 **done** |
 | 2.4 | MDL → SQL compiler, Postgres + MySQL dialects | R3.4, R2.3 | 2.3, 1.5 **done** |
 | 2.5 | Identifier resolution against registry + `did_you_mean` via edit distance | R2.2 | 2.2, 1.2 **done** |
-| 2.6 | `dry_plan` tool — validate, return plan metadata, no execution | R2.1, R2.4 | 2.5 |
+| 2.6 | `dry_plan` tool — validate, return plan metadata, no execution | R2.1, R2.4 | 2.5 **done** |
 | 2.7 | Tool surface rework: `list_sources`, `describe_model`, `list_metrics`, `query` | R6.1 | 2.2 |
 | 2.8 | `mdl bootstrap`: introspect + profile → draft YAML, all `verified: false` | R3.7, §5.4 | 0.6, 0.7, 2.2 |
 | 2.9 | LLM drafting of descriptions/metrics inside bootstrap | R3.7, §5.3 | 2.8 |
