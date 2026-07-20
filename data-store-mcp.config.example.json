@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "name": "analytics",
+      "type": "postgres",
+      "description": "Read-only analytics warehouse",
+      "options": {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "user": "analytics_reader",
+        "password": "${ANALYTICS_DB_PASSWORD}",
+        "database": "analytics"
+      }
+    }
+  ]
+}

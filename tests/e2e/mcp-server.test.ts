@@ -3,14 +3,16 @@
  * speaks real MCP over stdio, and drives the published tools against the
  * Pagila and Sakila fixtures.
  *
- * This is the only suite that exercises the tool layer (registry, zod schemas,
- * ConnectionManager, response envelope). The adapter suites bypass all of it.
+ * This is the only suite that exercises startup config, the source registry,
+ * tool schemas, and the response envelope. Adapter suites bypass all of it.
  *
  * Requires `npm run build` first — see the global setup guard below.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { PAGILA, SAKILA, MONGO, EXPECTED } from '../helpers/sources.js';
@@ -24,20 +26,61 @@ function payload(result: any): any {
 
 describe('MCP server (stdio) / Pagila + Sakila', () => {
   let client: Client;
+  let configDir: string;
 
   beforeAll(async () => {
     if (!existsSync('dist/server.js')) {
       throw new Error('dist/server.js missing — run `npm run build` first');
     }
 
+    await seedMongo();
+    configDir = mkdtempSync(join(tmpdir(), 'data-store-mcp-e2e-'));
+    const configPath = join(configDir, 'config.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        sources: [
+          {
+            name: 'e2e-pagila',
+            type: 'postgres',
+            description: 'Pagila fixture',
+            options: PAGILA.options,
+          },
+          {
+            name: 'e2e-sakila',
+            type: 'mysql',
+            description: 'Sakila fixture',
+            options: SAKILA.options,
+          },
+          {
+            name: 'e2e-mongo',
+            type: 'mongodb',
+            description: 'Mongo fixture',
+            options: MONGO.options,
+          },
+        ],
+      }),
+    );
+
+    const inheritedEnv = Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] =>
+        typeof entry[1] === 'string'
+      ),
+    );
+
     client = new Client({ name: 'e2e-test', version: '1.0.0' }, { capabilities: {} });
     await client.connect(
-      new StdioClientTransport({ command: 'node', args: ['dist/server.js'] })
+      new StdioClientTransport({
+        command: 'node',
+        args: ['dist/server.js'],
+        env: { ...inheritedEnv, DATA_STORE_MCP_CONFIG: configPath },
+      }),
     );
   }, 60_000);
 
   afterAll(async () => {
     await client?.close();
+    if (configDir) rmSync(configDir, { recursive: true, force: true });
   });
 
   describe('tools/list', () => {
@@ -45,38 +88,52 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
       expect(names).toEqual([
-        'connect_database',
         'echo',
         'inspect_database',
+        'list_sources',
         'query_database',
       ]);
+      expect(names).not.toContain('connect_database');
+      expect(JSON.stringify(tools.map((tool) => tool.inputSchema))).not.toMatch(/password/i);
     });
 
-    // GAP (spec B1): SQL Server is implemented but the tool enum omits it, so
-    // it is unreachable through MCP. Deferred, but assert it stays deliberate.
-    it('GAP B1: connect_database does not offer sqlserver', async () => {
-      const { tools } = await client.listTools();
-      const connect = tools.find((t) => t.name === 'connect_database')!;
-      const types = (connect.inputSchema as any).properties.type.enum;
-      expect(types).toEqual(['mysql', 'postgres', 'mongodb']);
+    it('list_sources returns safe descriptors for startup-configured sources', async () => {
+      const res = payload(
+        await client.callTool({ name: 'list_sources', arguments: {} }),
+      );
+
+      expect(res.sources).toEqual([
+        { name: 'e2e-mongo', type: 'mongodb', description: 'Mongo fixture' },
+        { name: 'e2e-pagila', type: 'postgres', description: 'Pagila fixture' },
+        { name: 'e2e-sakila', type: 'mysql', description: 'Sakila fixture' },
+      ]);
+      expect(JSON.stringify(res)).not.toMatch(/options|password|uri|host|user/i);
+    });
+
+    it('keeps fixture passwords out of a complete list-and-call transcript', async () => {
+      const listed = await client.listTools();
+      const sources = await client.callTool({ name: 'list_sources', arguments: {} });
+      const queried = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS ok' },
+      });
+      const transcript = JSON.stringify({ listed, sources, queried });
+
+      for (const password of new Set([
+        PAGILA.options.password,
+        SAKILA.options.password,
+        new URL(MONGO.options.uri).password,
+      ])) {
+        expect(password).not.toBe('');
+        expect(transcript).not.toContain(password);
+      }
     });
   });
 
   describe('postgres / pagila', () => {
     const id = 'e2e-pagila';
 
-    it('connect_database connects to Pagila', async () => {
-      const res = payload(
-        await client.callTool({
-          name: 'connect_database',
-          arguments: { type: 'postgres', id, ...PAGILA.options },
-        })
-      );
-      expect(res.connectionId).toBe(id);
-      expect(res.message).toMatch(/Successfully connected/);
-    });
-
-    it('query_database runs a real query', async () => {
+    it('query_database uses the startup-configured source', async () => {
       const res = payload(
         await client.callTool({
           name: 'query_database',
@@ -117,17 +174,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
   describe('mysql / sakila', () => {
     const id = 'e2e-sakila';
 
-    it('connect_database connects to Sakila', async () => {
-      const res = payload(
-        await client.callTool({
-          name: 'connect_database',
-          arguments: { type: 'mysql', id, ...SAKILA.options },
-        })
-      );
-      expect(res.connectionId).toBe(id);
-    });
-
-    it('query_database runs a real query', async () => {
+    it('query_database uses the startup-configured source', async () => {
       const res = payload(
         await client.callTool({
           name: 'query_database',
@@ -154,25 +201,6 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
   describe('mongodb / seeded fixture', () => {
     const id = 'e2e-mongo';
-
-    beforeAll(async () => {
-      await seedMongo();
-    });
-
-    it('connect_database connects to MongoDB', async () => {
-      const res = payload(
-        await client.callTool({
-          name: 'connect_database',
-          arguments: {
-            type: 'mongodb',
-            id,
-            uri: MONGO.options.uri,
-            database: MONGO.options.database,
-          },
-        }),
-      );
-      expect(res.connectionId).toBe(id);
-    });
 
     it('routes an unbounded find through the Mongo gate', async () => {
       const res = payload(
@@ -218,7 +246,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(res.isError).toBe(true);
       const { error } = JSON.parse(res.content[0].text);
       expect(error.code).toBe('EXECUTION_FAILED');
-      expect(error.message).toMatch(/Connection not found: nope/);
+      expect(error.message).toMatch(/Source not found: nope/);
     });
 
     // T0.11 criterion 2.
@@ -268,50 +296,6 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       });
       // "Tool execution failed" alone gives the agent nothing to act on.
       expect(res.content[0].text).not.toMatch(/^Tool execution failed$/);
-    });
-
-    // T0.11 criterion 5. Uses a malformed Mongo URI specifically because
-    // MongoParseError echoes the connection string verbatim ("Protocol and
-    // host list are required in \"mongodb://user:pw@\""), so this genuinely
-    // exercises redaction. A connection-refused error would not: neither pg
-    // nor mongodb includes credentials on that path, and asserting against it
-    // would pass whether or not redaction existed.
-    it('redacts the password from a driver error that echoes the URI', async () => {
-      const res: any = await client.callTool({
-        name: 'connect_database',
-        arguments: {
-          type: 'mongodb',
-          uri: 'mongodb://dsm:super_secret_pw@',
-          database: 'nope',
-          id: 'e2e-badmongo',
-        },
-      });
-      expect(res.isError).toBe(true);
-      const text = res.content[0].text;
-      // Proves the leaky message reached us and was scrubbed, not that no
-      // message arrived.
-      expect(text).toMatch(/Protocol and host list are required/);
-      expect(text).toContain('mongodb://dsm:***@');
-      expect(text).not.toContain('super_secret_pw');
-    });
-
-    it('leaks no password anywhere in a failed SQL connect', async () => {
-      const res: any = await client.callTool({
-        name: 'connect_database',
-        arguments: {
-          type: 'postgres',
-          host: '127.0.0.1',
-          port: 1,
-          user: 'nobody',
-          password: 'super_secret_pw',
-          database: 'nope',
-          id: 'e2e-badconn',
-        },
-      });
-      expect(res.isError).toBe(true);
-      // Regression guard rather than proof: pg reports ECONNREFUSED without
-      // the password today, so this asserts that stays true.
-      expect(JSON.stringify(res)).not.toContain('super_secret_pw');
     });
 
     // T0.11 criterion 4 — unknown *tool* is legitimately a protocol error and

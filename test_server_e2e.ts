@@ -20,26 +20,18 @@ async function main() {
     console.log('Connected to server');
 
     try {
-        console.log('Calling connect_database...');
-        const result = await client.callTool({
-            name: 'connect_database',
-            arguments: {
-                type: 'mysql',
-                host: '127.0.0.1',
-                port: 3306,
-                user: 'root',
-                password: 'root',
-                database: 'sakila',
-                id: 'my-mysql-connection'
-            }
+        console.log('Calling list_sources...');
+        const sourcesResult = await client.callTool({
+            name: 'list_sources',
+            arguments: {},
         });
-        console.log('Connect result:', JSON.stringify(result, null, 2));
+        console.log('Sources:', JSON.stringify(sourcesResult, null, 2));
 
         console.log('Calling query_database...');
         const queryResult = await client.callTool({
             name: 'query_database',
             arguments: {
-                connectionId: 'my-mysql-connection',
+                connectionId: process.env.TEST_SOURCE ?? 'analytics',
                 sql: 'SELECT 1 as val'
             }
         });

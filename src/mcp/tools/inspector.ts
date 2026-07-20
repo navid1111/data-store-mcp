@@ -1,6 +1,6 @@
 
 import { z } from 'zod';
-import { ConnectionManager } from '../../connection-utils.js';
+import { SourceRegistry } from '../../sources/registry.js';
 
 export const inspectDatabaseTool = {
     name: 'inspect_database',
@@ -24,10 +24,10 @@ export const inspectDatabaseTool = {
 
         const parsed = schema.parse(args);
         const connectionId = parsed.connectionId;
-        const db = ConnectionManager.getInstance().getConnection(connectionId);
+        const db = SourceRegistry.getInstance().getSource(connectionId);
 
         if (!db) {
-            throw new Error(`Connection with ID ${connectionId} not found`);
+            throw new Error(`Source not found: ${connectionId}`);
         }
 
         const [tables, columns, relations] = await Promise.all([

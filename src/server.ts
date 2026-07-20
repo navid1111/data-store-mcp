@@ -10,6 +10,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { tools } from './mcp/tools/index.js';
 import { toToolErrorResult } from './mcp/errors.js';
+import { loadConfig } from './config/load.js';
+import { SourceRegistry } from './sources/registry.js';
 
 /**
  * Create and configure the MCP server
@@ -72,6 +74,9 @@ function createServer(): Server {
  * Start the server
  */
 async function main() {
+  const config = await loadConfig();
+  await SourceRegistry.initialize(config.sources);
+
   const server = createServer();
   const transport = new StdioServerTransport();
   

@@ -1,8 +1,8 @@
 
 import { z } from 'zod';
-import { ConnectionManager } from '../../connection-utils.js';
 import { buildPlan, dialectFor } from '../../governance/gate.js';
 import { buildMongoPlan } from '../../governance/mongo.js';
+import { SourceRegistry } from '../../sources/registry.js';
 
 export const queryDatabaseTool = {
     name: 'query_database',
@@ -39,10 +39,10 @@ export const queryDatabaseTool = {
         });
 
         const parsed = schema.parse(args);
-        const db = ConnectionManager.getInstance().getConnection(parsed.connectionId);
+        const db = SourceRegistry.getInstance().getSource(parsed.connectionId);
 
         if (!db) {
-            throw new Error(`Connection not found: ${parsed.connectionId}`);
+            throw new Error(`Source not found: ${parsed.connectionId}`);
         }
 
         if (db.config.type !== 'mongodb' && !parsed.sql) {
