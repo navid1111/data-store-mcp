@@ -6,6 +6,7 @@ import { redactSecrets } from '../mcp/errors.js';
 import { parsePrincipal } from '../auth/principal.js';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied' | 'timeout';
+export const NO_POLICIES_APPLIED = 'none applied';
 
 export interface AuditRecordInput {
     source: string;
@@ -15,6 +16,7 @@ export interface AuditRecordInput {
     durationMs: number;
     outcome: AuditOutcome;
     errorCode?: string;
+    denialReason?: string;
 }
 
 export interface AuditRecord extends AuditRecordInput {
@@ -77,11 +79,17 @@ export class AuditLog {
             principal: this.clean(requiredPrincipal(this.principalProvider())),
             source: this.clean(input.source),
             sql: this.clean(input.sql),
-            appliedPolicies: input.appliedPolicies.map((policy) => this.clean(policy)),
+            appliedPolicies: normalizedPolicies(input.appliedPolicies)
+                .map((policy) => this.clean(policy)),
             rowCount: input.rowCount,
             durationMs: input.durationMs,
             outcome: input.outcome,
             ...(input.errorCode ? { errorCode: this.clean(input.errorCode) } : {}),
+            ...(input.outcome === 'denied' ? {
+                denialReason: this.clean(
+                    input.denialReason ?? 'Denied by governance without a reported reason.',
+                ),
+            } : {}),
         };
         const line = `${JSON.stringify(record)}\n`;
 
@@ -101,6 +109,12 @@ export class AuditLog {
         }
         return cleaned;
     }
+}
+
+function normalizedPolicies(policies: readonly string[]): string[] {
+    const named = [...new Set(policies.filter((policy) =>
+        policy.trim().length > 0 && policy !== NO_POLICIES_APPLIED))];
+    return named.length > 0 ? named : [NO_POLICIES_APPLIED];
 }
 
 function requiredPrincipal(value: string): string {

@@ -484,6 +484,17 @@ metrics:
       });
       await client.callTool({
         name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: 'SELECT replacement_cost FROM film',
+        },
+      });
+      await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila' },
+      });
+      await client.callTool({
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM audit_missing_table' },
       });
       await client.callTool({
@@ -495,27 +506,38 @@ metrics:
       const added = auditRecords(auditPath).slice(beforeRecords.length);
 
       expect(afterText.startsWith(before)).toBe(true);
-      expect(added).toHaveLength(4);
+      expect(added).toHaveLength(6);
       expect(added.map((record) => record.outcome)).toEqual([
         'success',
         'denied',
+        'denied',
+        'failure',
         'failure',
         'timeout',
       ]);
-      expect(added.map((record) => record.rowCount)).toEqual([1, 0, 0, 0]);
+      expect(added.map((record) => record.rowCount)).toEqual([1, 0, 0, 0, 0, 0]);
 
       for (const record of added) {
         expect(record.principal).toBe('e2e-analyst');
         expect(record.source).toBe('e2e-pagila');
         expect(typeof record.sql).toBe('string');
         expect(Array.isArray(record.appliedPolicies)).toBe(true);
+        expect(record.appliedPolicies.length).toBeGreaterThan(0);
         expect(typeof record.durationMs).toBe('number');
         expect(record.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       }
       expect(added[0].sql).toMatch(/LIMIT 1000/i);
       expect(added[0].appliedPolicies).toContain('read-only');
       expect(added[1].appliedPolicies).toContain('read-only');
-      expect(added[3].errorCode).toBe('E_TIMEOUT');
+      expect(added[1].denialReason).toMatch(/DELETE is not permitted/i);
+      expect(added[2]).toEqual(expect.objectContaining({
+        appliedPolicies: ['analyst:film-internal-cost'],
+        denialReason: 'Denied by policy: analyst:film-internal-cost',
+        errorCode: 'E_POLICY_DENIED',
+      }));
+      expect(added[3].appliedPolicies).toEqual(['none applied']);
+      expect(added[3]).not.toHaveProperty('denialReason');
+      expect(added[5].errorCode).toBe('E_TIMEOUT');
 
       for (const password of [
         PAGILA.options.password,

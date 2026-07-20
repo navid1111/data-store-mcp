@@ -13,6 +13,7 @@ interface ModelBinding {
     readonly model: Model;
     readonly hidden: ReadonlySet<string>;
     readonly policyNames: readonly string[];
+    readonly policyNamesByColumn: ReadonlyMap<string, readonly string[]>;
     readonly expandStars: boolean;
 }
 
@@ -94,8 +95,17 @@ function visitSelect(
         if (!model) continue;
         const hidden = hiddenColumnNames(model, policy);
         const qualifier = identifierValue(value.as) ?? table;
-        const policyNames = hiddenPolicies(model, policy);
-        const binding = { qualifier, model, hidden, policyNames, expandStars: !cteModel };
+        const policyNamesByColumn = hiddenPoliciesByColumn(model, policy);
+        const policyNames = [...new Set([...policyNamesByColumn.values()].flatMap((names) =>
+            [...names]))].sort();
+        const binding = {
+            qualifier,
+            model,
+            hidden,
+            policyNames,
+            policyNamesByColumn,
+            expandStars: !cteModel,
+        };
         localBindings.set(normalize(qualifier), binding);
         if (hidden.size === 0) continue;
         bindings.set(normalize(qualifier), binding);
@@ -163,8 +173,11 @@ function rejectHiddenReferences(
         if (value !== statement && nodeType(value) === 'select') return;
         if (nodeType(value) === 'column_ref') {
             const column = identifierValue(value.column);
-            if (column && column !== '*' && isHiddenReference(value.table, column, bindings)) {
-                throw policyDenied('clac');
+            const policy = column && column !== '*'
+                ? hiddenPolicyForReference(value.table, column, bindings)
+                : undefined;
+            if (policy) {
+                throw policyDenied(policy);
             }
         }
         for (const nested of Object.values(value)) inspect(nested);
@@ -174,14 +187,28 @@ function rejectHiddenReferences(
     }
 }
 
-function isHiddenReference(
+function hiddenPolicyForReference(
     tableValue: unknown,
     column: string,
     bindings: ReadonlyMap<string, ModelBinding>,
-): boolean {
+): string | undefined {
     const table = identifierValue(tableValue);
-    if (table) return bindings.get(normalize(table))?.hidden.has(column) ?? false;
-    return [...new Set(bindings.values())].some((binding) => binding.hidden.has(column));
+    if (table) {
+        const binding = bindings.get(normalize(table));
+        return binding?.hidden.has(column) ? policyForColumn(binding, column) : undefined;
+    }
+    const binding = [...new Set(bindings.values())].find((candidate) =>
+        candidate.hidden.has(column));
+    return binding ? policyForColumn(binding, column) : undefined;
+}
+
+function policyForColumn(binding: ModelBinding, column: string): string {
+    const modelColumn = binding.model.columns.find((candidate) =>
+        sameName(candidate.name, column) ||
+        Boolean(candidate.sourceColumn && sameName(candidate.sourceColumn, column)));
+    return modelColumn
+        ? binding.policyNamesByColumn.get(normalize(modelColumn.name))?.[0] ?? 'clac'
+        : 'clac';
 }
 
 function expandStars(
@@ -244,9 +271,14 @@ function visibleColumns(binding: ModelBinding): Column[] {
     return binding.model.columns.filter((column) => !binding.hidden.has(column.name));
 }
 
-function hiddenPolicies(model: Model, policy: ResolvedPolicy): string[] {
-    return [...new Set(model.columns.flatMap((column) =>
-        policy.hiddenColumnPolicies[`${model.name}.${column.name}`] ?? []))].sort();
+function hiddenPoliciesByColumn(
+    model: Model,
+    policy: ResolvedPolicy,
+): ReadonlyMap<string, readonly string[]> {
+    return new Map(model.columns.flatMap((column) => {
+        const names = policy.hiddenColumnPolicies[`${model.name}.${column.name}`];
+        return names?.length ? [[normalize(column.name), names] as const] : [];
+    }));
 }
 
 function cteModelMap(value: unknown, semantic: SemanticRegistry): Map<string, Model> {

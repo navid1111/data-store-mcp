@@ -43,12 +43,14 @@ export async function executeWithAudit<T>(
         return result.value;
     } catch (error) {
         addDeniedPolicy(context, error);
+        const denialReason = denialReasonFor(error);
         await audit.append({
             ...context,
             rowCount: 0,
             durationMs: elapsedMs(started),
             outcome: outcomeFor(error),
             errorCode: errorCodeFor(error),
+            ...(denialReason ? { denialReason } : {}),
         });
         throw error;
     }
@@ -81,11 +83,20 @@ function errorCodeFor(error: unknown): string {
 }
 
 function addDeniedPolicy(context: AuditExecutionContext, error: unknown): void {
-    if (!isGovernanceError(error) || context.appliedPolicies.length > 0) return;
+    if (!isGovernanceError(error)) return;
 
     if (error.detail.code === 'E_WRITE_FORBIDDEN') {
-        context.appliedPolicies.push('read-only');
+        if (!context.appliedPolicies.includes('read-only')) {
+            context.appliedPolicies.push('read-only');
+        }
     } else if (error.detail.code === 'E_POLICY_DENIED') {
-        context.appliedPolicies.push(error.detail.policy);
+        if (!context.appliedPolicies.includes(error.detail.policy)) {
+            context.appliedPolicies.push(error.detail.policy);
+        }
     }
+}
+
+function denialReasonFor(error: unknown): string | undefined {
+    if (!isGovernanceError(error)) return undefined;
+    return outcomeFor(error) === 'denied' ? error.detail.message : undefined;
 }
