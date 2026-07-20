@@ -17,7 +17,12 @@ const postgresSource = {
 describe('parseConfig', () => {
   it('loads typed sources and expands credentials from the environment', () => {
     const config = parseConfig(
-      { sources: [postgresSource], limits: { maxResultBytes: 4096 } },
+      {
+        principal: 'local-analyst',
+        audit: { path: './audit.jsonl' },
+        sources: [postgresSource],
+        limits: { maxResultBytes: 4096, timeoutMs: 2500 },
+      },
       { DB_PASSWORD: 'server-side-secret' },
     );
 
@@ -35,37 +40,51 @@ describe('parseConfig', () => {
         },
       },
     ]);
-    expect(config.execution).toEqual({ maxBytes: 4096 });
+    expect(config.audit).toEqual({ path: './audit.jsonl', principal: 'local-analyst' });
+    expect(config.execution).toEqual({ maxBytes: 4096, timeoutMs: 2500 });
   });
 
   it('rejects duplicate source names', () => {
     expect(() =>
       parseConfig(
-        { sources: [postgresSource, postgresSource] },
+        configWith({ sources: [postgresSource, postgresSource] }),
         { DB_PASSWORD: 'secret' },
       ),
     ).toThrow(/Duplicate source name: analytics/);
   });
 
   it('rejects a missing environment variable without exposing other values', () => {
-    expect(() => parseConfig({ sources: [postgresSource] }, {})).toThrow(
+    expect(() => parseConfig(configWith({ sources: [postgresSource] }), {})).toThrow(
       /missing environment variable: DB_PASSWORD/,
     );
   });
 
   it('rejects SQL Server because it is outside the active source scope', () => {
     expect(() =>
-      parseConfig({
+      parseConfig(configWith({
         sources: [{ ...postgresSource, type: 'sqlserver' }],
-      }, { DB_PASSWORD: 'secret' }),
+      }), { DB_PASSWORD: 'secret' }),
     ).toThrow();
   });
 
   it('rejects unknown config keys rather than silently accepting a typo', () => {
     expect(() =>
-      parseConfig({
+      parseConfig(configWith({
         sources: [{ ...postgresSource, pasword: 'typo' }],
-      }, { DB_PASSWORD: 'secret' }),
+      }), { DB_PASSWORD: 'secret' }),
     ).toThrow();
   });
+
+  it('requires an out-of-band principal and append target', () => {
+    expect(() => parseConfig({ sources: [postgresSource] }, { DB_PASSWORD: 'secret' }))
+      .toThrow();
+  });
 });
+
+function configWith(overrides: Record<string, unknown>) {
+  return {
+    principal: 'local-analyst',
+    audit: { path: './audit.jsonl' },
+    ...overrides,
+  };
+}

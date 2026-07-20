@@ -12,6 +12,8 @@ import { tools } from './mcp/tools/index.js';
 import { toToolErrorResult } from './mcp/errors.js';
 import { loadConfig } from './config/load.js';
 import { SourceRegistry } from './sources/registry.js';
+import { AuditLog } from './audit/log.js';
+import type { ConnectionConfig } from './database-source.js';
 
 /**
  * Create and configure the MCP server
@@ -75,7 +77,11 @@ function createServer(): Server {
  */
 async function main() {
   const config = await loadConfig();
-  await SourceRegistry.initialize(config.sources, config.execution);
+  const auditLog = await AuditLog.open({
+    ...config.audit,
+    secrets: credentialSecrets(config.sources),
+  });
+  await SourceRegistry.initialize(config.sources, config.execution, auditLog);
 
   const server = createServer();
   const transport = new StdioServerTransport();
@@ -84,6 +90,21 @@ async function main() {
   
   // eslint-disable-next-line no-console
   console.error('data-store-mcp MCP server running on stdio with database support');
+}
+
+function credentialSecrets(sources: ConnectionConfig[]): string[] {
+  return sources.flatMap((source) => {
+    if (source.type !== 'mongodb') return [source.options.password];
+
+    try {
+      const password = new URL(source.options.uri).password;
+      return password ? [password, decodeURIComponent(password)] : [];
+    } catch {
+      // connect() reports an invalid URI during startup; audit setup must not
+      // echo it while trying to extract a redaction value.
+      return [];
+    }
+  });
 }
 
 main().catch((error) => {

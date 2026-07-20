@@ -2,6 +2,7 @@
 
 import type { ConnectionConfig, Database, DatabaseType } from '../database-source.js';
 import type { ExecuteOptions } from '../governance/plan.js';
+import type { AuditLog } from '../audit/log.js';
 import { MongoDatabase } from '../mongodb.js';
 import { MysqlDatabase } from '../mysql.js';
 import { PostgresDatabase } from '../postgres.js';
@@ -16,19 +17,23 @@ export class SourceRegistry {
     private static instance: SourceRegistry | undefined;
     private readonly sources: Map<string, Database>;
     private readonly executionOptions: Readonly<ExecuteOptions>;
+    private readonly auditLog: AuditLog;
 
     private constructor(
         sources: Map<string, Database>,
         executionOptions: ExecuteOptions,
+        auditLog: AuditLog,
     ) {
         this.sources = sources;
         this.executionOptions = Object.freeze({ ...executionOptions });
+        this.auditLog = auditLog;
     }
 
     /** Connect every configured source before publishing the registry. */
     static async initialize(
         configs: ConnectionConfig[],
-        executionOptions: ExecuteOptions = {},
+        executionOptions: ExecuteOptions,
+        auditLog: AuditLog,
     ): Promise<SourceRegistry> {
         const sources = new Map<string, Database>();
 
@@ -42,7 +47,7 @@ export class SourceRegistry {
             sources.set(config.id, database);
         }
 
-        const registry = new SourceRegistry(sources, executionOptions);
+        const registry = new SourceRegistry(sources, executionOptions, auditLog);
         SourceRegistry.instance = registry;
         return registry;
     }
@@ -60,6 +65,10 @@ export class SourceRegistry {
 
     getExecutionOptions(): Readonly<ExecuteOptions> {
         return this.executionOptions;
+    }
+
+    getAuditLog(): AuditLog {
+        return this.auditLog;
     }
 
     /**

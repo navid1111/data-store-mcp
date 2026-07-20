@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -27,6 +27,7 @@ function payload(result: any): any {
 describe('MCP server (stdio) / Pagila + Sakila', () => {
   let client: Client;
   let configDir: string;
+  let auditPath: string;
 
   beforeAll(async () => {
     if (!existsSync('dist/server.js')) {
@@ -36,10 +37,13 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     await seedMongo();
     configDir = mkdtempSync(join(tmpdir(), 'data-store-mcp-e2e-'));
     const configPath = join(configDir, 'config.json');
+    auditPath = join(configDir, 'audit.jsonl');
     writeFileSync(
       configPath,
       JSON.stringify({
-        limits: { maxResultBytes: 4 * 1024 * 1024 },
+        principal: 'e2e-analyst',
+        audit: { path: auditPath },
+        limits: { maxResultBytes: 4 * 1024 * 1024, timeoutMs: 750 },
         sources: [
           {
             name: 'e2e-pagila',
@@ -390,5 +394,68 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       );
       expect(res.results[0].n).toBe(EXPECTED.film);
     });
+
+    it('appends exactly one complete audit record for every outcome', async () => {
+      const before = readFileSync(auditPath, 'utf8');
+      const beforeRecords = auditRecords(auditPath);
+
+      await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 42 AS answer' },
+      });
+      await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'DELETE FROM film' },
+      });
+      await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM audit_missing_table' },
+      });
+      await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT pg_sleep(5)' },
+      });
+
+      const afterText = readFileSync(auditPath, 'utf8');
+      const added = auditRecords(auditPath).slice(beforeRecords.length);
+
+      expect(afterText.startsWith(before)).toBe(true);
+      expect(added).toHaveLength(4);
+      expect(added.map((record) => record.outcome)).toEqual([
+        'success',
+        'denied',
+        'failure',
+        'timeout',
+      ]);
+      expect(added.map((record) => record.rowCount)).toEqual([1, 0, 0, 0]);
+
+      for (const record of added) {
+        expect(record.principal).toBe('e2e-analyst');
+        expect(record.source).toBe('e2e-pagila');
+        expect(typeof record.sql).toBe('string');
+        expect(Array.isArray(record.appliedPolicies)).toBe(true);
+        expect(typeof record.durationMs).toBe('number');
+        expect(record.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      }
+      expect(added[0].sql).toMatch(/LIMIT 1000/i);
+      expect(added[0].appliedPolicies).toContain('read-only');
+      expect(added[1].appliedPolicies).toContain('read-only');
+      expect(added[3].errorCode).toBe('E_TIMEOUT');
+
+      for (const password of [
+        PAGILA.options.password,
+        SAKILA.options.password,
+        new URL(MONGO.options.uri).password,
+      ]) {
+        expect(afterText).not.toContain(password);
+      }
+    });
   });
 });
+
+function auditRecords(path: string): any[] {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}

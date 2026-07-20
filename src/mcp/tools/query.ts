@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { buildPlan, dialectFor } from '../../governance/gate.js';
 import { buildMongoPlan } from '../../governance/mongo.js';
 import { SourceRegistry } from '../../sources/registry.js';
+import { executeWithAudit } from '../../audit/execution.js';
 
 export const queryDatabaseTool = {
     name: 'query_database',
@@ -31,58 +32,94 @@ export const queryDatabaseTool = {
         required: ['connectionId'],
     },
     handler: async (args: unknown) => {
-        const schema = z.object({
-            connectionId: z.string(),
-            sql: z.string().optional(),
-            query: z.record(z.any()).optional(),
-            params: z.array(z.any()).optional(),
-        });
-
-        const parsed = schema.parse(args);
         const registry = SourceRegistry.getInstance();
-        const db = registry.getSource(parsed.connectionId);
+        const initial = auditContextFrom(args);
 
-        if (!db) {
-            throw new Error(`Source not found: ${parsed.connectionId}`);
-        }
+        return executeWithAudit<unknown>(registry.getAuditLog(), initial, async (audit) => {
+            const schema = z.object({
+                connectionId: z.string(),
+                sql: z.string().optional(),
+                query: z.record(z.any()).optional(),
+                params: z.array(z.any()).optional(),
+            });
 
-        if (db.config.type !== 'mongodb' && !parsed.sql) {
-            throw new Error('SQL connections require sql');
-        }
+            const parsed = schema.parse(args);
+            audit.source = parsed.connectionId;
+            const db = registry.getSource(parsed.connectionId);
 
-        if (db.config.type === 'mongodb') {
-            const plan = buildMongoPlan(parsed.query ?? parsed.sql);
-            const structure = await db.getSchema(plan.payload.collection);
+            if (!db) {
+                throw new Error(`Source not found: ${parsed.connectionId}`);
+            }
+
+            if (db.config.type !== 'mongodb' && !parsed.sql) {
+                throw new Error('SQL connections require sql');
+            }
+
+            if (db.config.type === 'mongodb') {
+                const plan = buildMongoPlan(parsed.query ?? parsed.sql);
+                audit.sql = JSON.stringify(plan.payload);
+                audit.appliedPolicies.push(...plan.appliedPolicies);
+                const structure = await db.getSchema(plan.payload.collection);
+                const results = await db.execute(plan, registry.getExecutionOptions());
+
+                return {
+                    value: {
+                        connectionId: parsed.connectionId,
+                        type: db.config.type,
+                        database: db.config.options.database,
+                        structure,
+                        query: plan.payload,
+                        appliedLimit: plan.appliedLimit,
+                        appliedPolicies: plan.appliedPolicies,
+                        results,
+                    },
+                    rowCount: resultRowCount(results),
+                };
+            }
+
+            // Agent SQL never reaches the driver directly: the gate parses it,
+            // refuses writes, and injects a row limit, yielding a QueryPlan —
+            // the only thing execute() accepts.
+            const plan = buildPlan(parsed.sql || '', {
+                dialect: dialectFor(db.config.type),
+                params: parsed.params,
+            });
+            audit.sql = plan.sql;
+            audit.appliedPolicies.push(...plan.appliedPolicies);
+
             const results = await db.execute(plan, registry.getExecutionOptions());
 
             return {
-                connectionId: parsed.connectionId,
-                type: db.config.type,
-                database: db.config.options.database,
-                structure,
-                query: plan.payload,
-                appliedLimit: plan.appliedLimit,
-                appliedPolicies: plan.appliedPolicies,
-                results,
+                value: {
+                    connectionId: parsed.connectionId,
+                    type: db.config.type,
+                    appliedLimit: plan.appliedLimit,
+                    appliedPolicies: plan.appliedPolicies,
+                    results,
+                },
+                rowCount: resultRowCount(results),
             };
-        }
-
-        // Agent SQL never reaches the driver directly: the gate parses it,
-        // refuses writes, and injects a row limit, yielding a QueryPlan —
-        // the only thing execute() accepts.
-        const plan = buildPlan(parsed.sql || '', {
-            dialect: dialectFor(db.config.type),
-            params: parsed.params,
         });
-
-        const results = await db.execute(plan, registry.getExecutionOptions());
-
-        return {
-            connectionId: parsed.connectionId,
-            type: db.config.type,
-            appliedLimit: plan.appliedLimit,
-            appliedPolicies: plan.appliedPolicies,
-            results,
-        };
     },
 };
+
+function auditContextFrom(args: unknown): { source: string; sql: string } {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        return { source: '<invalid>', sql: '' };
+    }
+
+    const raw = args as Record<string, unknown>;
+    const source = typeof raw.connectionId === 'string' ? raw.connectionId : '<invalid>';
+    if (typeof raw.sql === 'string') return { source, sql: raw.sql };
+
+    try {
+        return { source, sql: raw.query === undefined ? '' : JSON.stringify(raw.query) };
+    } catch {
+        return { source, sql: '<unserializable query>' };
+    }
+}
+
+function resultRowCount(result: unknown): number {
+    if (Array.isArray(result)) return result.length;
+    return result === undefined || result === null ? 0 : 1;
+}

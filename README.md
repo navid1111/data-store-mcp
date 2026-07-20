@@ -112,6 +112,12 @@ The optional `limits.maxResultBytes` setting caps the exact UTF-8 JSON size of
 query results. PostgreSQL, MySQL, and MongoDB cursors are stopped as soon as the
 cap is crossed, before the remaining result is buffered in Node.
 
+The required `principal` is supplied out-of-band at startup and is never an MCP
+tool argument. Every query attempt appends one JSON record to `audit.path`,
+including policy denials, timeouts, byte-cap failures, and database errors. The
+log contains compiled SQL and policy names, but never bound values, error text,
+or configured passwords. `limits.timeoutMs` optionally sets the query timeout.
+
 Because the server runs on stdio, it is typically launched by an MCP client rather than manually used in a shell.
 
 ## Example MCP client configuration

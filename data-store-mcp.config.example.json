@@ -1,6 +1,11 @@
 {
+  "principal": "local-analyst",
+  "audit": {
+    "path": "./data-store-mcp.audit.jsonl"
+  },
   "limits": {
-    "maxResultBytes": 10485760
+    "maxResultBytes": 10485760,
+    "timeoutMs": 30000
   },
   "sources": [
     {
