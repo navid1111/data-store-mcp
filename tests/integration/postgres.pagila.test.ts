@@ -63,29 +63,30 @@ describe('PostgresDatabase / Pagila', () => {
   describe('getSchema', () => {
     it('returns columns for a named table', async () => {
       const cols = await db.getSchema('film');
-      const names = cols.map((c: any) => c.column_name);
+      const names = cols.map((c) => c.name);
 
       expect(names).toContain('film_id');
       expect(names).toContain('title');
       expect(names).toContain('rental_rate');
 
-      const title = cols.find((c: any) => c.column_name === 'title');
+      const title = cols.find((c) => c.name === 'title');
       expect(title).toBeDefined();
-      expect(title!.data_type).toMatch(/character varying|text/);
-      expect(title!.is_nullable).toBe('NO');
+      expect(title!.dataType).toMatch(/character varying|text/);
+      expect(title!.nullable).toBe(false);
     });
 
-    // GAP (spec B7): without a table name this returns every column in the
-    // schema with no table attribution, so the result cannot be turned into a
-    // model. `mdl bootstrap` is blocked on this.
-    it('GAP B7: omits table_name when called without a table', async () => {
+    // T0.5 — this call previously lost table attribution entirely (B7).
+    it('attributes every column when called without a table', async () => {
       const cols = await db.getSchema();
       expect(cols.length).toBeGreaterThan(50);
-      expect(Object.keys(cols[0])).toEqual(['column_name', 'data_type', 'is_nullable']);
-      expect(cols[0]).not.toHaveProperty('table_name');
+      expect(new Set(cols.map((c) => c.table)).size).toBeGreaterThan(5);
     });
 
-    it.todo('after 0.5: returns ColumnInfo[] including table, PK flag and comment');
+    it('reports Pagila primary keys', async () => {
+      const cols = await db.getSchema('film');
+      const pk = cols.filter((c) => c.isPrimaryKey).map((c) => c.name);
+      expect(pk).toEqual(['film_id']);
+    });
 
     // T0.3 — the injection that GAP B10 previously demonstrated.
     it('rejects an injected predicate in tableName', async () => {

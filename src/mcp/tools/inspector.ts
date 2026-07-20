@@ -30,25 +30,37 @@ export const inspectDatabaseTool = {
             throw new Error(`Connection with ID ${connectionId} not found`);
         }
 
-        const [schemaResult, relations] = await Promise.all([
+        const [tables, columns, relations] = await Promise.all([
+            db.listTables(),
             db.getSchema(parsed.name),
-            db.getRelations()
+            db.getRelations(),
         ]);
 
-        if (db.config.type === 'mongodb') {
-            return {
-                connectionId,
-                type: db.config.type,
-                database: db.config.options.database,
-                collections: schemaResult,
-                relationships: relations,
-            };
+        // Columns are nested under their table rather than returned as a flat
+        // list. A flat list was unattributable when no table was named (B7):
+        // the agent received 50+ columns with no way to tell them apart.
+        const byTable = new Map<string, typeof columns>();
+        for (const column of columns) {
+            const existing = byTable.get(column.table);
+            if (existing) {
+                existing.push(column);
+            } else {
+                byTable.set(column.table, [column]);
+            }
         }
+
+        const selected = parsed.name
+            ? tables.filter((t) => t.name === parsed.name)
+            : tables;
 
         return {
             connectionId,
             type: db.config.type,
-            tables: schemaResult,
+            database: db.config.options.database,
+            tables: selected.map((table) => ({
+                ...table,
+                columns: byTable.get(table.name) ?? [],
+            })),
             relations,
         };
     },

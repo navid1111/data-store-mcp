@@ -10,6 +10,7 @@ export type {
     ProfileOptions,
 } from "./sources/types.js";
 export { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
+import type { TableInfo, ColumnInfo } from "./sources/types.js";
 
 export type DatabaseType = "mysql" | "postgres" | "sqlserver" | "mongodb";
 
@@ -93,6 +94,16 @@ export abstract class Database<C extends ConnectionConfig = ConnectionConfig> {
     abstract connect(): Promise<void>;
 
     abstract query(sql: string, params?: QueryParams): Promise<unknown>;
-    abstract getSchema(tableName?: string): Promise<unknown>;
+
+    /** Tables and views, without their columns. */
+    abstract listTables(): Promise<TableInfo[]>;
+
+    /**
+     * Columns, uniformly shaped across engines. With no argument, returns
+     * every column of every table — each carrying its own `table`, so the
+     * result is attributable (B7).
+     */
+    abstract getSchema(tableName?: string): Promise<ColumnInfo[]>;
+
     abstract getRelations(databaseName?: string): Promise<TableRelation[]>;
 }

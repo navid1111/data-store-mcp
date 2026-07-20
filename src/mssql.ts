@@ -6,6 +6,8 @@ import {
     Row,
     TableRelation,
 } from "./database-source.js";
+import type { ColumnInfo, TableInfo } from "./sources/types.js";
+import { assertValidIdentifier } from "./identifiers.js";
 import sql from 'mssql';
 
 export class MssqlDatabase extends Database<MssqlConnectionConfig> {
@@ -70,22 +72,103 @@ export class MssqlDatabase extends Database<MssqlConnectionConfig> {
         }
     }
 
-    async getSchema(tableName?: string): Promise<Row[]> {
+    async listTables(): Promise<TableInfo[]> {
         if (!this.pool) {
             throw new Error("Database not connected");
         }
 
-        const query = tableName
-            ? `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @tableName`
-            : `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'`;
+        const result = await this.pool.request().query(`
+            SELECT
+                t.name                       AS name,
+                s.name                       AS table_schema,
+                'table'                      AS kind,
+                CAST(p.value AS NVARCHAR(MAX)) AS comment,
+                SUM(ps.row_count)            AS estimated_row_count
+            FROM sys.tables t
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            LEFT JOIN sys.extended_properties p
+              ON p.major_id = t.object_id AND p.minor_id = 0 AND p.name = 'MS_Description'
+            LEFT JOIN sys.dm_db_partition_stats ps
+              ON ps.object_id = t.object_id AND ps.index_id IN (0, 1)
+            GROUP BY t.name, s.name, CAST(p.value AS NVARCHAR(MAX))
+            UNION ALL
+            SELECT v.name, s.name, 'view', NULL, NULL
+            FROM sys.views v
+            JOIN sys.schemas s ON s.schema_id = v.schema_id
+            ORDER BY name
+        `);
 
-        const request = this.pool.request();
-        if (tableName) {
-            request.input('tableName', sql.VarChar, tableName);
+        return (result.recordset as Row[]).map((r) => ({
+            name: String(r.name),
+            schema: String(r.table_schema),
+            kind: r.kind === 'view' ? ('view' as const) : ('table' as const),
+            ...(r.comment != null ? { comment: String(r.comment) } : {}),
+            ...(r.estimated_row_count != null
+                ? { estimatedRowCount: Number(r.estimated_row_count) }
+                : {}),
+        }));
+    }
+
+    async getSchema(tableName?: string): Promise<ColumnInfo[]> {
+        if (!this.pool) {
+            throw new Error("Database not connected");
         }
 
-        const result = await request.query(query);
-        return result.recordset;
+        if (tableName !== undefined) {
+            assertValidIdentifier(tableName, 'table name');
+        }
+
+        const request = this.pool.request();
+        request.input('tableName', sql.VarChar, tableName ?? null);
+
+        const result = await request.query(`
+            SELECT
+                t.name                          AS table_name,
+                c.name                          AS name,
+                TYPE_NAME(c.user_type_id)       AS data_type,
+                c.is_nullable                   AS is_nullable,
+                c.column_id                     AS position,
+                dc.definition                   AS default_value,
+                CAST(p.value AS NVARCHAR(MAX))  AS comment,
+                CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+                CASE WHEN uq.column_id IS NOT NULL THEN 1 ELSE 0 END AS is_unique
+            FROM sys.columns c
+            JOIN sys.tables t ON t.object_id = c.object_id
+            LEFT JOIN sys.default_constraints dc ON dc.object_id = c.default_object_id
+            LEFT JOIN sys.extended_properties p
+              ON p.major_id = c.object_id AND p.minor_id = c.column_id
+             AND p.name = 'MS_Description'
+            LEFT JOIN (
+                SELECT ic.object_id, ic.column_id
+                FROM sys.index_columns ic
+                JOIN sys.indexes i
+                  ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                WHERE i.is_primary_key = 1
+            ) pk ON pk.object_id = c.object_id AND pk.column_id = c.column_id
+            LEFT JOIN (
+                SELECT ic.object_id, MIN(ic.column_id) AS column_id
+                FROM sys.index_columns ic
+                JOIN sys.indexes i
+                  ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                WHERE i.is_unique = 1 AND i.is_primary_key = 0
+                GROUP BY ic.object_id, ic.index_id
+                HAVING COUNT(*) = 1
+            ) uq ON uq.object_id = c.object_id AND uq.column_id = c.column_id
+            WHERE (@tableName IS NULL OR t.name = @tableName)
+            ORDER BY t.name, c.column_id
+        `);
+
+        return (result.recordset as Row[]).map((r) => ({
+            table: String(r.table_name),
+            name: String(r.name),
+            dataType: String(r.data_type),
+            nullable: Boolean(r.is_nullable),
+            isPrimaryKey: Boolean(Number(r.is_primary_key)),
+            isUnique: Boolean(Number(r.is_unique)),
+            position: Number(r.position),
+            ...(r.default_value != null ? { defaultValue: String(r.default_value) } : {}),
+            ...(r.comment != null ? { comment: String(r.comment) } : {}),
+        }));
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {

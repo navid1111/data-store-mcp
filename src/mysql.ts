@@ -1,6 +1,7 @@
 
 import { Database, MysqlConnectionConfig, Row, TableRelation } from "./database-source.js";
-import { quoteMysqlIdentifier } from "./identifiers.js";
+import type { ColumnInfo, TableInfo } from "./sources/types.js";
+import { assertValidIdentifier } from "./identifiers.js";
 import mysql from 'mysql2/promise';
 
 export class MysqlDatabase extends Database<MysqlConnectionConfig> {
@@ -22,23 +23,102 @@ export class MysqlDatabase extends Database<MysqlConnectionConfig> {
     return rows as Row[];
   }
 
-  async getSchema(tableName?: string): Promise<Row[]> {
+  async listTables(): Promise<TableInfo[]> {
     if (!this.connection) {
       throw new Error("Database not connected");
     }
 
-    // `DESCRIBE ?` is not valid SQL — an identifier cannot be bound — so the
-    // table name is validated and backtick-quoted instead. The schema name in
-    // the other branch is config-derived rather than caller-supplied, but is
-    // bound anyway so no branch of this method interpolates a value.
-    if (tableName !== undefined) {
-      return this.query(`DESCRIBE ${quoteMysqlIdentifier(tableName, 'table name')}`);
+    const rows = await this.query(`
+      SELECT
+        TABLE_NAME                 AS name,
+        TABLE_SCHEMA               AS table_schema,
+        TABLE_TYPE                 AS table_type,
+        NULLIF(TABLE_COMMENT, '')  AS comment,
+        TABLE_ROWS                 AS estimated_row_count
+      FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = ?
+      ORDER BY TABLE_NAME
+    `, [this.config.options.database]);
+
+    return rows.map((r) => ({
+      name: String(r.name),
+      schema: String(r.table_schema),
+      kind: r.table_type === 'VIEW' ? ('view' as const) : ('table' as const),
+      ...(r.comment != null ? { comment: String(r.comment) } : {}),
+      ...(r.estimated_row_count != null
+        ? { estimatedRowCount: Number(r.estimated_row_count) }
+        : {}),
+    }));
+  }
+
+  async getSchema(tableName?: string): Promise<ColumnInfo[]> {
+    if (!this.connection) {
+      throw new Error("Database not connected");
     }
 
-    return this.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = ?`,
-      [this.config.options.database]
-    );
+    // Validated even though it is bound below, so an invalid identifier fails
+    // the same way here as it does on Postgres.
+    if (tableName !== undefined) {
+      assertValidIdentifier(tableName, 'table name');
+    }
+
+    const database = this.config.options.database;
+
+    // Key flags come from STATISTICS rather than COLUMN_KEY: COLUMN_KEY marks
+    // 'UNI' only on the first column of a unique index, and is ambiguous when
+    // a column belongs to several indexes.
+    const rows = await this.query(`
+      SELECT
+        c.TABLE_NAME                  AS table_name,
+        c.COLUMN_NAME                 AS name,
+        c.DATA_TYPE                   AS data_type,
+        c.IS_NULLABLE                 AS is_nullable,
+        c.ORDINAL_POSITION            AS position,
+        c.COLUMN_DEFAULT              AS default_value,
+        NULLIF(c.COLUMN_COMMENT, '')  AS comment,
+        (pk.COLUMN_NAME IS NOT NULL)  AS is_primary_key,
+        (uq.COLUMN_NAME IS NOT NULL)  AS is_unique
+      FROM information_schema.COLUMNS c
+      LEFT JOIN information_schema.STATISTICS pk
+        ON  pk.TABLE_SCHEMA = c.TABLE_SCHEMA
+        AND pk.TABLE_NAME   = c.TABLE_NAME
+        AND pk.COLUMN_NAME  = c.COLUMN_NAME
+        AND pk.INDEX_NAME   = 'PRIMARY'
+      LEFT JOIN (
+        SELECT s.TABLE_SCHEMA, s.TABLE_NAME, s.COLUMN_NAME
+        FROM information_schema.STATISTICS s
+        JOIN (
+          SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+          FROM information_schema.STATISTICS
+          WHERE TABLE_SCHEMA = ? AND NON_UNIQUE = 0 AND INDEX_NAME <> 'PRIMARY'
+          GROUP BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+          HAVING COUNT(*) = 1
+        ) single
+          ON  single.TABLE_SCHEMA = s.TABLE_SCHEMA
+          AND single.TABLE_NAME   = s.TABLE_NAME
+          AND single.INDEX_NAME   = s.INDEX_NAME
+        WHERE s.TABLE_SCHEMA = ?
+      ) uq
+        ON  uq.TABLE_SCHEMA = c.TABLE_SCHEMA
+        AND uq.TABLE_NAME   = c.TABLE_NAME
+        AND uq.COLUMN_NAME  = c.COLUMN_NAME
+      WHERE c.TABLE_SCHEMA = ?
+        AND (? IS NULL OR c.TABLE_NAME = ?)
+      ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION
+    `, [database, database, database, tableName ?? null, tableName ?? null]);
+
+    return rows.map((r) => ({
+      table: String(r.table_name),
+      name: String(r.name),
+      dataType: String(r.data_type),
+      nullable: r.is_nullable === 'YES',
+      // MySQL returns 1/0 for boolean expressions, not true/false.
+      isPrimaryKey: Boolean(Number(r.is_primary_key)),
+      isUnique: Boolean(Number(r.is_unique)),
+      position: Number(r.position),
+      ...(r.default_value != null ? { defaultValue: String(r.default_value) } : {}),
+      ...(r.comment != null ? { comment: String(r.comment) } : {}),
+    }));
   }
 
   async getRelations(databaseName?: string): Promise<TableRelation[]> {

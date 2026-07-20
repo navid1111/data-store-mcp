@@ -5,6 +5,7 @@ import {
     QueryParams,
     TableRelation,
 } from "./database-source.js";
+import type { ColumnInfo, TableInfo } from "./sources/types.js";
 
 type MongoOperation = "find" | "findOne" | "aggregate" | "countDocuments" | "distinct";
 
@@ -20,12 +21,20 @@ interface MongoQueryPayload {
     field?: string;
 }
 
-/** Collection summary returned by {@link MongoDatabase.getSchema}. */
-export interface CollectionInfo {
-    name: string;
-    estimatedDocumentCount: number;
-    sampleFields: string[];
-    indexes: Array<{ name?: string; key: Document; unique: boolean }>;
+/** How many documents to sample when inferring a collection's fields. */
+const SAMPLE_SIZE = 100;
+
+/** BSON-ish type name for an inferred column's `dataType`. */
+function bsonTypeOf(value: unknown): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    if (value instanceof Date) return 'date';
+    if (typeof value === 'object') {
+        // ObjectId and friends expose _bsontype.
+        const bsontype = (value as { _bsontype?: string })._bsontype;
+        return bsontype ? bsontype.toLowerCase() : 'object';
+    }
+    return typeof value;
 }
 
 export class MongoDatabase extends Database<MongoConnectionConfig> {
@@ -87,19 +96,91 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
         }
     }
 
-    async getSchema(collectionName?: string): Promise<CollectionInfo[]> {
+    async listTables(): Promise<TableInfo[]> {
+        const db = this.requireDb();
+        const collections = await db.listCollections({}, { nameOnly: true }).toArray();
+
+        return Promise.all(
+            collections.map(async (c) => ({
+                name: c.name,
+                schema: this.config.options.database,
+                // Mongo has no view/table distinction in listCollections with
+                // nameOnly; views would need `type` from the full listing.
+                kind: 'table' as const,
+                estimatedRowCount: await db.collection(c.name).estimatedDocumentCount(),
+            }))
+        );
+    }
+
+    async getSchema(collectionName?: string): Promise<ColumnInfo[]> {
+        const db = this.requireDb();
+
+        const names = collectionName
+            ? [collectionName]
+            : (await db.listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name);
+
+        const perCollection = await Promise.all(
+            names.map((name) => this.describeCollection(name))
+        );
+        return perCollection.flat();
+    }
+
+    /**
+     * Derives columns for one collection by sampling documents.
+     *
+     * A document store has no declared schema, so fields are inferred from a
+     * sample. Sampling many documents rather than one is what makes an
+     * optional field visible: `findOne` would miss any field absent from the
+     * first document, and would report a single type for a heterogeneous one.
+     */
+    private async describeCollection(name: string): Promise<ColumnInfo[]> {
+        const db = this.requireDb();
+        const collection = db.collection(name);
+
+        const [sample, indexes] = await Promise.all([
+            collection
+                .aggregate([{ $sample: { size: SAMPLE_SIZE } }])
+                .toArray()
+                .catch(() => [] as Document[]),
+            collection.indexes().catch(() => []),
+        ]);
+
+        /** Field name -> observed BSON type names and how many docs contained it. */
+        const fields = new Map<string, { types: Set<string>; present: number }>();
+        for (const doc of sample) {
+            for (const [key, value] of Object.entries(doc)) {
+                const entry = fields.get(key) ?? { types: new Set<string>(), present: 0 };
+                entry.types.add(bsonTypeOf(value));
+                entry.present += 1;
+                fields.set(key, entry);
+            }
+        }
+
+        /** Fields covered by a single-field unique index. */
+        const uniqueFields = new Set(
+            indexes
+                .filter((i) => i.unique && Object.keys(i.key).length === 1)
+                .map((i) => Object.keys(i.key)[0])
+        );
+
+        return [...fields.entries()].map(([field, info], index) => ({
+            table: name,
+            name: field,
+            // A union when the sample disagrees, rather than first-seen.
+            dataType: [...info.types].sort().join(' | '),
+            // Absent from some sampled documents means effectively nullable.
+            nullable: field !== '_id' && info.present < sample.length,
+            isPrimaryKey: field === '_id',
+            isUnique: field === '_id' || uniqueFields.has(field),
+            position: index + 1,
+        }));
+    }
+
+    private requireDb(): Db {
         if (!this.db) {
             throw new Error("Database not connected");
         }
-
-        if (collectionName) {
-            return [await this.inspectCollection(collectionName)];
-        }
-
-        const collections = await this.db.listCollections({}, { nameOnly: true }).toArray();
-        return Promise.all(
-            collections.map((collection) => this.inspectCollection(collection.name))
-        );
+        return this.db;
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {
@@ -125,27 +206,4 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
         return rawPayload as unknown as MongoQueryPayload;
     }
 
-    private async inspectCollection(collectionName: string): Promise<CollectionInfo> {
-        if (!this.db) {
-            throw new Error("Database not connected");
-        }
-
-        const collection = this.db.collection(collectionName);
-        const [indexes, sample, estimatedDocumentCount] = await Promise.all([
-            collection.indexes(),
-            collection.findOne({}, { projection: { _id: 0 } }),
-            collection.estimatedDocumentCount(),
-        ]);
-
-        return {
-            name: collectionName,
-            estimatedDocumentCount,
-            sampleFields: sample ? Object.keys(sample) : [],
-            indexes: indexes.map((index) => ({
-                name: index.name,
-                key: index.key,
-                unique: Boolean(index.unique),
-            })),
-        };
-    }
 }

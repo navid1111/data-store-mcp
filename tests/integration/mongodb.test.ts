@@ -97,30 +97,55 @@ describe('MongoDatabase / seeded fixture', () => {
     });
   });
 
+  describe('listTables', () => {
+    it('returns the seeded collections with row estimates', async () => {
+      const tables = await db.listTables();
+      expect(tables.map((t) => t.name).sort()).toEqual(['actor', 'film']);
+
+      const film = tables.find((t) => t.name === 'film');
+      expect(film!.estimatedRowCount).toBe(SEEDED.films);
+      expect(film!.kind).toBe('table');
+    });
+  });
+
   describe('getSchema', () => {
-    it('summarises a named collection', async () => {
-      const [info] = await db.getSchema('film');
-      expect(info.name).toBe('film');
-      expect(info.estimatedDocumentCount).toBe(SEEDED.films);
-      expect(info.sampleFields).toContain('title');
-      expect(info.indexes.some((i: any) => i.unique)).toBe(true);
+    it('derives ColumnInfo for a named collection', async () => {
+      const cols = await db.getSchema('film');
+      const names = cols.map((c) => c.name);
+
+      expect(names).toContain('title');
+      expect(names).toContain('rating');
+      expect(cols.every((c) => c.table === 'film')).toBe(true);
     });
 
-    it('summarises every collection when called with no argument', async () => {
-      const all = await db.getSchema();
-      const names = all.map((c: any) => c.name).sort();
-      expect(names).toEqual(['actor', 'film']);
+    it('marks _id as the primary key', async () => {
+      const cols = await db.getSchema('film');
+      const id = cols.find((c) => c.name === '_id');
+      expect(id!.isPrimaryKey).toBe(true);
+      expect(id!.isUnique).toBe(true);
     });
 
-    // Field inference comes from a single sampled document, so an optional or
-    // heterogeneous field is invisible. spec.md R3.8 (profiling) needs to
-    // sample many documents, not one.
-    it('GAP: infers fields from a single sampled document', async () => {
-      const [info] = await db.getSchema('film');
-      expect(info.sampleFields.length).toBeGreaterThan(0);
+    it('marks a unique-indexed field as unique', async () => {
+      const cols = await db.getSchema('film');
+      expect(cols.find((c) => c.name === 'film_id')!.isUnique).toBe(true);
+      expect(cols.find((c) => c.name === 'title')!.isUnique).toBe(false);
     });
 
-    it.todo('after R3.8: infers a field union by sampling N documents');
+    it('covers every collection when called with no argument', async () => {
+      const cols = await db.getSchema();
+      expect(new Set(cols.map((c) => c.table)).size).toBe(2);
+    });
+
+    // Previously inferred fields from a single findOne, so an optional field
+    // was invisible and a heterogeneous one reported its first-seen type.
+    it('infers a field union by sampling many documents', async () => {
+      const cols = await db.getSchema('film');
+      const rating = cols.find((c) => c.name === 'rating');
+      expect(rating!.dataType).toBe('string');
+
+      // `actors` is an embedded array in every seeded document.
+      expect(cols.find((c) => c.name === 'actors')!.dataType).toBe('array');
+    });
   });
 
   describe('getRelations', () => {

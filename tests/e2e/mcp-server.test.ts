@@ -86,29 +86,31 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(res.results[0].n).toBe(EXPECTED.film);
     });
 
-    it('inspect_database returns tables and relations for a named table', async () => {
+    it('inspect_database nests columns under a named table', async () => {
       const res = payload(
         await client.callTool({
           name: 'inspect_database',
           arguments: { connectionId: id, name: 'film' },
         })
       );
-      expect(res.tables.map((c: any) => c.column_name)).toContain('title');
+      expect(res.tables).toHaveLength(1);
+      expect(res.tables[0].name).toBe('film');
+      expect(res.tables[0].columns.map((c: any) => c.name)).toContain('title');
       expect(res.relations.length).toBeGreaterThan(10);
     });
 
-    // GAP (spec B7): with no table name, inspect_database returns every column
-    // in the schema with no table attribution — the agent cannot tell which
-    // table any column belongs to. This is B7 surfacing at the MCP layer.
-    it('GAP B7: inspect_database without a table returns unattributed columns', async () => {
+    // T0.5 — previously returned a flat, unattributable column list (B7).
+    it('inspect_database attributes every column when no table is named', async () => {
       const res = payload(
         await client.callTool({ name: 'inspect_database', arguments: { connectionId: id } })
       );
-      expect(res.tables.length).toBeGreaterThan(50);
-      expect(res.tables[0]).not.toHaveProperty('table_name');
+      expect(res.tables.length).toBeGreaterThan(5);
+      for (const table of res.tables) {
+        expect(typeof table.name).toBe('string');
+        expect(Array.isArray(table.columns)).toBe(true);
+        expect(table.columns.every((c: any) => c.table === table.name)).toBe(true);
+      }
     });
-
-    it.todo('after 0.5: inspect_database returns tables with their columns nested');
   });
 
   describe('mysql / sakila', () => {
@@ -135,14 +137,16 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(Number(res.results[0].n)).toBe(EXPECTED.film);
     });
 
-    it('inspect_database works (exercises the B12 optional-arg fallback)', async () => {
+    it('inspect_database returns the same shape as Postgres', async () => {
       const res = payload(
         await client.callTool({
           name: 'inspect_database',
           arguments: { connectionId: id, name: 'film' },
         })
       );
-      expect(res.tables.map((c: any) => c.Field)).toContain('title');
+      expect(res.tables).toHaveLength(1);
+      expect(res.tables[0].columns.map((c: any) => c.name)).toContain('title');
+      expect(res.tables[0].columns[0]).not.toHaveProperty('Field');
       expect(res.relations.length).toBeGreaterThan(10);
     });
   });
