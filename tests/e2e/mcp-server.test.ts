@@ -148,30 +148,114 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
   });
 
   describe('error handling', () => {
-    // GAP (spec B14): the handler throws, so tool *execution* failures surface
-    // as JSON-RPC protocol errors (-32603) rather than as a tool result with
-    // isError: true. A protocol error is not part of the model's tool-result
-    // stream, so the agent cannot read the message and self-correct — which is
-    // exactly what R2.2 (structured errors with hints) depends on.
-    it('GAP B14: unknown connectionId raises a protocol error, not a tool result', async () => {
-      await expect(
-        client.callTool({
+    // T0.11 criterion 1 — resolves with isError, does not reject.
+    it('returns isError for an unknown connectionId', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'nope', sql: 'SELECT 1' },
+      });
+      expect(res.isError).toBe(true);
+      const { error } = JSON.parse(res.content[0].text);
+      expect(error.code).toBe('EXECUTION_FAILED');
+      expect(error.message).toMatch(/Connection not found: nope/);
+    });
+
+    // T0.11 criterion 2.
+    it('returns isError for a SQL source called with no sql', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila' },
+      });
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error.message).toMatch(/require sql/);
+    });
+
+    it('returns structured field issues for invalid arguments', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 42 },
+      });
+      expect(res.isError).toBe(true);
+      const { error } = JSON.parse(res.content[0].text);
+      expect(error.code).toBe('INVALID_ARGUMENTS');
+      expect(error.issues[0].path).toBe('connectionId');
+    });
+
+    // T0.11 criterion 3 — a driver failure must not kill the server.
+    it('survives a driver-level failure and stays usable', async () => {
+      const bad: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM no_such_table_xyz' },
+      });
+      expect(bad.isError).toBe(true);
+      expect(JSON.parse(bad.content[0].text).error.message).toMatch(/no_such_table_xyz/);
+
+      // Same client, same connection: the server is still alive and working.
+      const good = payload(
+        await client.callTool({
           name: 'query_database',
-          arguments: { connectionId: 'nope', sql: 'SELECT 1' },
+          arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS ok' },
         })
-      ).rejects.toThrow(/-32603.*Connection not found/);
+      );
+      expect(good.results[0].ok).toBe(1);
     });
 
-    it('GAP B14: a missing sql argument raises a protocol error', async () => {
-      await expect(
-        client.callTool({ name: 'query_database', arguments: { connectionId: 'e2e-pagila' } })
-      ).rejects.toThrow(/-32603.*require sql/);
+    it('does not leak the error message as a generic string', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: { connectionId: 'nope', sql: 'SELECT 1' },
+      });
+      // "Tool execution failed" alone gives the agent nothing to act on.
+      expect(res.content[0].text).not.toMatch(/^Tool execution failed$/);
     });
 
-    it.todo('after R2.2: execution failures return isError + structured payload');
+    // T0.11 criterion 5. Uses a malformed Mongo URI specifically because
+    // MongoParseError echoes the connection string verbatim ("Protocol and
+    // host list are required in \"mongodb://user:pw@\""), so this genuinely
+    // exercises redaction. A connection-refused error would not: neither pg
+    // nor mongodb includes credentials on that path, and asserting against it
+    // would pass whether or not redaction existed.
+    it('redacts the password from a driver error that echoes the URI', async () => {
+      const res: any = await client.callTool({
+        name: 'connect_database',
+        arguments: {
+          type: 'mongodb',
+          uri: 'mongodb://dsm:super_secret_pw@',
+          database: 'nope',
+          id: 'e2e-badmongo',
+        },
+      });
+      expect(res.isError).toBe(true);
+      const text = res.content[0].text;
+      // Proves the leaky message reached us and was scrubbed, not that no
+      // message arrived.
+      expect(text).toMatch(/Protocol and host list are required/);
+      expect(text).toContain('mongodb://dsm:***@');
+      expect(text).not.toContain('super_secret_pw');
+    });
 
-    // Unknown *tool* is legitimately a protocol error, unlike the two above.
-    it('rejects an unknown tool', async () => {
+    it('leaks no password anywhere in a failed SQL connect', async () => {
+      const res: any = await client.callTool({
+        name: 'connect_database',
+        arguments: {
+          type: 'postgres',
+          host: '127.0.0.1',
+          port: 1,
+          user: 'nobody',
+          password: 'super_secret_pw',
+          database: 'nope',
+          id: 'e2e-badconn',
+        },
+      });
+      expect(res.isError).toBe(true);
+      // Regression guard rather than proof: pg reports ECONNREFUSED without
+      // the password today, so this asserts that stays true.
+      expect(JSON.stringify(res)).not.toContain('super_secret_pw');
+    });
+
+    // T0.11 criterion 4 — unknown *tool* is legitimately a protocol error and
+    // must not be converted alongside the others.
+    it('still rejects an unknown tool at protocol level', async () => {
       await expect(
         client.callTool({ name: 'no_such_tool', arguments: {} })
       ).rejects.toThrow(/Unknown tool/);

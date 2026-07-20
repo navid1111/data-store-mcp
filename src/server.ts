@@ -9,6 +9,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { tools } from './mcp/tools/index.js';
+import { toToolErrorResult } from './mcp/errors.js';
 
 /**
  * Create and configure the MCP server
@@ -42,6 +43,8 @@ function createServer(): Server {
     const { name, arguments: args } = request.params;
     const tool = tools[name];
 
+    // An unknown tool is a protocol error, not an execution failure: the
+    // client called something that was never advertised. This one still throws.
     if (!tool) {
       throw new Error(`Unknown tool: ${name}`);
     }
@@ -57,7 +60,8 @@ function createServer(): Server {
         ],
       };
     } catch (error) {
-      throw new Error(`Tool execution failed: ${(error as Error).message}`);
+      // Returned, not thrown — see src/mcp/errors.ts for why.
+      return toToolErrorResult(error);
     }
   });
 
