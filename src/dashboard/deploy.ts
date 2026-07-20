@@ -1,5 +1,10 @@
 /** Provider-facing upload for one generated dashboard artifact. */
 
+import {
+    consumeDeploymentConfirmation,
+    type DeploymentConfirmationToken,
+} from './confirmation.js';
+
 export interface DashboardDeploymentOptions {
     endpoint: string;
     providerName: string;
@@ -25,7 +30,9 @@ interface ProviderResponse {
 export async function deployDashboard(
     html: string,
     options: DashboardDeploymentOptions,
+    confirmationToken?: DeploymentConfirmationToken,
 ): Promise<DashboardDeployment> {
+    consumeDeploymentConfirmation(confirmationToken);
     if (!html.trim()) throw new Error('Dashboard deployment requires non-empty HTML.');
     if (!options.providerName.trim()) throw new Error('Deployment provider name is required.');
     const endpoint = deploymentEndpoint(options.endpoint);

@@ -3,6 +3,7 @@
 /** Command-line entry point for local administration and governed queries. */
 
 import type { ConnectionConfig, Database } from '../database-source.js';
+import { readFile } from 'node:fs/promises';
 import { loadConfig, CONFIG_PATH_ENV, type AppConfig } from '../config/load.js';
 import { PostgresDatabase } from '../postgres.js';
 import { MysqlDatabase } from '../mysql.js';
@@ -24,6 +25,8 @@ import { loadSkill, listSkillNames } from '../skills/registry.js';
 import { installSkillDiscovery } from '../skills/install.js';
 import { parsePrincipal, runWithPrincipal } from '../auth/principal.js';
 import { PolicyEngine } from '../governance/policy.js';
+import { deployDashboard } from '../dashboard/deploy.js';
+import { requestPublicDeploymentConfirmation } from '../dashboard/confirmation.js';
 
 type OptionValue = string | boolean;
 
@@ -42,6 +45,7 @@ Commands:
   mdl bootstrap         Generate a draft MDL artifact from a live source
   ask <question>        Ask through guided or direct prompting
   query --sql <sql>     Execute governed, read-only SQL
+  dashboard deploy      Publish a generated dashboard after human confirmation
   skills <command>      Retrieve workflow guides or add client discovery
 
 Run "dsm <command> --help" for command-specific options.
@@ -65,6 +69,20 @@ Introspects and profiles a configured source into a reviewable MDL YAML artifact
 
 Executes SQL only after the read-only governance gate has approved and limited it.
 --json writes one machine-readable JSON document to stdout.
+`,
+    dashboard: `Usage: dsm dashboard <deploy> [options]
+
+Deploy publishes dashboard data publicly and always requires interactive human confirmation.
+`,
+    dashboardDeploy: `Usage: dsm dashboard deploy --file <path> --endpoint <url> --provider <name> [options]
+
+Options:
+  --site <name>         Optional provider site/project name
+  --token-env <name>    Environment variable containing the provider API token
+  --json                Write the deployment result as machine-readable JSON
+
+This command publishes dashboard data publicly on the internet. It requires a fresh
+interactive human confirmation for every deployment. There is no non-interactive override.
 `,
     ask: `Usage: dsm ask <question> (--guided|--direct) [options]
 
@@ -106,11 +124,59 @@ export async function runCli(argv: string[]): Promise<number> {
             return runAsk(rest);
         case 'query':
             return runQuery(rest);
+        case 'dashboard':
+            return runDashboard(rest);
         case 'skills':
             return runSkills(rest);
         default:
             throw new Error(`Unknown command "${command}". Run "dsm --help" for usage.`);
     }
+}
+
+async function runDashboard(argv: string[]): Promise<number> {
+    const [subcommand, ...rest] = argv;
+    if (!subcommand || isHelp(subcommand)) {
+        writeStdout(HELP.dashboard);
+        return 0;
+    }
+    if (subcommand !== 'deploy') {
+        throw new Error(`Unknown dashboard command "${subcommand}". Run "dsm dashboard --help" for usage.`);
+    }
+    return runDashboardDeploy(rest);
+}
+
+async function runDashboardDeploy(argv: string[]): Promise<number> {
+    const parsed = parseArguments(argv);
+    assertKnownOptions(parsed, [
+        'file', 'endpoint', 'provider', 'site', 'token-env', 'json', 'help',
+    ]);
+    if (hasOption(parsed, 'help')) {
+        writeStdout(HELP.dashboardDeploy);
+        return 0;
+    }
+    rejectPositionals(parsed, 'dashboard deploy');
+
+    const file = requiredString(parsed, 'file');
+    const endpoint = requiredString(parsed, 'endpoint');
+    const providerName = requiredString(parsed, 'provider');
+    const siteName = optionalString(parsed, 'site');
+    const tokenEnvironmentName = optionalString(parsed, 'token-env');
+    const bearerToken = tokenEnvironmentName
+        ? process.env[tokenEnvironmentName]
+        : undefined;
+    if (tokenEnvironmentName && bearerToken === undefined) {
+        throw new Error(`Provider token environment variable is missing: ${tokenEnvironmentName}`);
+    }
+    const html = await readFile(file, 'utf8');
+    const confirmation = await requestPublicDeploymentConfirmation();
+    const deployment = await deployDashboard(html, {
+        endpoint,
+        providerName,
+        ...(siteName ? { siteName } : {}),
+        ...(bearerToken ? { bearerToken } : {}),
+    }, confirmation);
+    writeData(deployment, parsed);
+    return 0;
 }
 
 async function runSkills(argv: string[]): Promise<number> {

@@ -3,6 +3,10 @@ import { createServer, type RequestListener, type Server } from 'node:http';
 import { once } from 'node:events';
 import { deployDashboard } from '../../src/dashboard/deploy.js';
 import { generateDashboard } from '../../src/dashboard/generate.js';
+import {
+  confirmPublicDeployment,
+  DEPLOYMENT_CONFIRMATION_PHRASE,
+} from '../../src/dashboard/confirmation.js';
 
 const servers: Server[] = [];
 
@@ -31,12 +35,13 @@ describe('dashboard provider deployment', () => {
       metrics: [{ name: 'orders', value: 42 }],
     });
 
+    const confirmation = confirmPublicDeployment(DEPLOYMENT_CONFIRMATION_PHRASE);
     const deployment = await deployDashboard(html, {
       endpoint,
       providerName: 'stub-pages',
       bearerToken: 'fixture-token',
       siteName: 'store-dashboard',
-    });
+    }, confirmation);
 
     expect(deployment).toEqual({
       provider: 'stub-pages',
@@ -58,7 +63,7 @@ describe('dashboard provider deployment', () => {
     await expect(deployDashboard('<!doctype html>', {
       endpoint,
       providerName: 'stub-pages',
-    })).rejects.toThrow(
+    }, confirmPublicDeployment(DEPLOYMENT_CONFIRMATION_PHRASE))).rejects.toThrow(
       'Dashboard deployment to stub-pages failed (503): provider maintenance',
     );
   });

@@ -94,6 +94,7 @@ describe('dsm CLI core commands', () => {
       ['mdl', 'bootstrap', '--help'],
       ['ask', '--help'],
       ['query', '--help'],
+      ['dashboard', 'deploy', '--help'],
       ['skills', '--help'],
     ];
 
