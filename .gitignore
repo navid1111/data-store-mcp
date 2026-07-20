@@ -24,6 +24,7 @@ coverage/
 !spec.md
 !plan.md
 !architecture.md
+!test.md
 !instructions.md
 !docs/**/*.md
 # Added by code-review-graph

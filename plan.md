@@ -29,19 +29,25 @@ order (build the semantic layer first — it's the interesting part) is wrong.
 
 **Goal:** make the codebase modelable and testable. No user-visible features.
 
-| ID | Task | Spec | Depends | Status |
-|---|---|---|---|---|
-| 0.1 | Vitest harness + CI (typecheck, test) on push | B6 | — | **done** |
-| 0.8 | Integration tests per source against Pagila / Sakila / seeded Mongo | B6 | 0.1 | **done** |
-| 0.10 | E2E test driving the real MCP server over stdio against Pagila + Sakila | B6 | 0.8 | **done** |
-| 0.11 | Return tool execution failures as `isError` results instead of throwing | B14, R2.2 | 0.10 | |
-| 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | |
-| 0.3 | Fix identifier injection in `getSchema` — Postgres (`WHERE table_name = '...'`) and MySQL (`DESCRIBE ...`) | B10 | 0.8 | |
-| 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | |
-| 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9 | 0.4 | |
-| 0.6 | Extend introspection: PK, unique, defaults, **DB comments** (`col_description`, `COLUMN_COMMENT`) | B8, §5.1 | 0.5 | |
-| 0.7 | Implement `profile()` for Postgres + MySQL | R3.8 | 0.5 | |
-| 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional (not substitutable) | B12 | 0.4 | |
+Ordered by dependency. IDs are stable and referenced by [test.md](test.md); the ordering
+column is what to work through.
+
+| # | ID | Task | Spec | Depends | Status |
+|---|---|---|---|---|---|
+| 1 | 0.1 | Vitest harness + CI (typecheck, build, test) on push | B6 | — | **done** |
+| 2 | 0.8 | Integration tests per source against Pagila / Sakila / seeded Mongo | B6 | 0.1 | **done** |
+| 3 | 0.10 | E2E test driving the real MCP server over stdio | B6 | 0.8 | **done** |
+| 4 | 0.3 | Fix identifier injection in `getSchema` — Postgres `WHERE table_name = '...'`, MySQL `DESCRIBE ...` | B10 | 0.8 | |
+| 5 | 0.11 | Return tool execution failures as `isError` results instead of throwing | B14, R2.2 | 0.10 | |
+| 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | |
+| 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | |
+| 8 | 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional | B12 | 0.4 | |
+| 9 | 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9, B13 | 0.4 | |
+| 10 | 0.6 | Extend introspection: PK, unique, defaults, **DB comments** | B8, §5.1 | 0.5 | |
+| 11 | 0.7 | Implement `profile()` for Postgres + MySQL | R3.8 | 0.5 | |
+
+Every task above has an explicit pass/fail specification in [test.md](test.md), keyed by
+the same ID.
 
 ### Fixture environment *(0.1 / 0.8, complete)*
 
