@@ -48,6 +48,9 @@ const configSchema = z.object({
     audit: z.object({
         path: z.string().min(1),
     }).strict(),
+    memory: z.object({
+        path: z.string().min(1),
+    }).strict().optional(),
     sources: z.array(sourceSchema).min(1),
     limits: z.object({
         maxResultBytes: z.number().int().positive().optional(),
@@ -63,6 +66,7 @@ export interface AppConfig {
     };
     sources: ConnectionConfig[];
     execution: ExecuteOptions;
+    memoryPath?: string;
 }
 
 /**
@@ -146,6 +150,7 @@ export function parseConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env):
                 ? { timeoutMs: parsed.limits.timeoutMs }
                 : {}),
         },
+        ...(parsed.memory ? { memoryPath: parsed.memory.path } : {}),
     };
 }
 

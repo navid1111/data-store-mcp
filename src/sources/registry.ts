@@ -7,6 +7,8 @@ import { MongoDatabase } from '../mongodb.js';
 import { MysqlDatabase } from '../mysql.js';
 import { PostgresDatabase } from '../postgres.js';
 import type { SemanticRegistry } from '../semantic/registry.js';
+import type { ExecutionMemoryIndex } from '../memory/index.js';
+import type { HybridMemoryRetriever } from '../memory/retrieval.js';
 
 export interface SourceDescriptor {
     name: string;
@@ -20,17 +22,23 @@ export class SourceRegistry {
     private readonly executionOptions: Readonly<ExecuteOptions>;
     private readonly auditLog: AuditLog;
     private readonly semanticRegistry: SemanticRegistry;
+    private readonly memoryIndex?: ExecutionMemoryIndex;
+    private readonly memoryRetriever?: HybridMemoryRetriever;
 
     private constructor(
         sources: Map<string, Database>,
         executionOptions: ExecuteOptions,
         auditLog: AuditLog,
         semanticRegistry: SemanticRegistry,
+        memoryIndex?: ExecutionMemoryIndex,
+        memoryRetriever?: HybridMemoryRetriever,
     ) {
         this.sources = sources;
         this.executionOptions = Object.freeze({ ...executionOptions });
         this.auditLog = auditLog;
         this.semanticRegistry = semanticRegistry;
+        this.memoryIndex = memoryIndex;
+        this.memoryRetriever = memoryRetriever;
     }
 
     /** Connect every configured source before publishing the registry. */
@@ -39,6 +47,8 @@ export class SourceRegistry {
         executionOptions: ExecuteOptions,
         auditLog: AuditLog,
         semanticRegistry: SemanticRegistry,
+        memoryIndex?: ExecutionMemoryIndex,
+        memoryRetriever?: HybridMemoryRetriever,
     ): Promise<SourceRegistry> {
         const sources = new Map<string, Database>();
 
@@ -52,7 +62,14 @@ export class SourceRegistry {
             sources.set(config.id, database);
         }
 
-        const registry = new SourceRegistry(sources, executionOptions, auditLog, semanticRegistry);
+        const registry = new SourceRegistry(
+            sources,
+            executionOptions,
+            auditLog,
+            semanticRegistry,
+            memoryIndex,
+            memoryRetriever,
+        );
         SourceRegistry.instance = registry;
         return registry;
     }
@@ -78,6 +95,14 @@ export class SourceRegistry {
 
     getSemanticRegistry(): SemanticRegistry {
         return this.semanticRegistry;
+    }
+
+    getMemoryIndex(): ExecutionMemoryIndex | undefined {
+        return this.memoryIndex;
+    }
+
+    getMemoryRetriever(): HybridMemoryRetriever | undefined {
+        return this.memoryRetriever;
     }
 
     /**

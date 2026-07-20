@@ -4,6 +4,8 @@ import { buildPlan, dialectFor } from '../../governance/gate.js';
 import { buildMongoPlan } from '../../governance/mongo.js';
 import { SourceRegistry } from '../../sources/registry.js';
 import { executeWithAudit } from '../../audit/execution.js';
+import { performance } from 'node:perf_hooks';
+import type { SemanticRegistry } from '../../semantic/registry.js';
 
 export const queryDatabaseTool = {
     name: 'query',
@@ -28,6 +30,10 @@ export const queryDatabaseTool = {
                 items: {},
                 description: 'Optional SQL parameters',
             },
+            question: {
+                type: 'string',
+                description: 'Optional natural-language question saved with successful prior art',
+            },
         },
         required: ['connectionId'],
     },
@@ -41,6 +47,7 @@ export const queryDatabaseTool = {
                 sql: z.string().optional(),
                 query: z.record(z.any()).optional(),
                 params: z.array(z.any()).optional(),
+                question: z.string().trim().min(1).optional(),
             });
 
             const parsed = schema.parse(args);
@@ -87,7 +94,22 @@ export const queryDatabaseTool = {
             audit.sql = plan.sql;
             audit.appliedPolicies.push(...plan.appliedPolicies);
 
+            const started = performance.now();
             const results = await db.execute(plan, registry.getExecutionOptions());
+            const memory = registry.getMemoryIndex();
+            if (parsed.question && memory) {
+                await memory.recordExecution({
+                    success: true,
+                    question: parsed.question,
+                    sql: plan.sql,
+                    rows: memoryRows(results),
+                    durationMs: Math.max(0, performance.now() - started),
+                    unverifiedModels: referencedUnverifiedModels(
+                        plan.sql,
+                        registry.getSemanticRegistry(),
+                    ),
+                });
+            }
 
             return {
                 value: {
@@ -122,4 +144,18 @@ function auditContextFrom(args: unknown): { source: string; sql: string } {
 function resultRowCount(result: unknown): number {
     if (Array.isArray(result)) return result.length;
     return result === undefined || result === null ? 0 : 1;
+}
+
+function memoryRows(result: unknown): Array<Record<string, unknown>> {
+    if (!Array.isArray(result)) return [];
+    return result.filter((row): row is Record<string, unknown> =>
+        Boolean(row && typeof row === 'object' && !Array.isArray(row)));
+}
+
+function referencedUnverifiedModels(sql: string, semantic: SemanticRegistry): string[] {
+    const identifiers = new Set(sql.toLowerCase().match(/[a-z_][a-z0-9_]*/g) ?? []);
+    return semantic.document.models
+        .filter((model) => !model.verified && identifiers.has(model.table.toLowerCase()))
+        .map((model) => model.name)
+        .sort();
 }

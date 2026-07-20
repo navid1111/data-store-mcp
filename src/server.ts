@@ -15,6 +15,9 @@ import { SourceRegistry } from './sources/registry.js';
 import { AuditLog } from './audit/log.js';
 import type { ConnectionConfig } from './database-source.js';
 import { SemanticRegistry } from './semantic/registry.js';
+import { ExecutionMemoryIndex } from './memory/index.js';
+import { HybridMemoryRetriever } from './memory/retrieval.js';
+import { HashEmbeddingProvider } from './memory/embedding.js';
 
 /**
  * Create and configure the MCP server
@@ -83,7 +86,20 @@ async function main() {
     secrets: credentialSecrets(config.sources),
   });
   const semanticRegistry = await SemanticRegistry.load(config.semanticPath);
-  await SourceRegistry.initialize(config.sources, config.execution, auditLog, semanticRegistry);
+  const memoryIndex = config.memoryPath
+    ? await ExecutionMemoryIndex.open(config.memoryPath)
+    : undefined;
+  const memoryRetriever = memoryIndex
+    ? new HybridMemoryRetriever(memoryIndex, new HashEmbeddingProvider())
+    : undefined;
+  await SourceRegistry.initialize(
+    config.sources,
+    config.execution,
+    auditLog,
+    semanticRegistry,
+    memoryIndex,
+    memoryRetriever,
+  );
 
   const server = createServer();
   const transport = new StdioServerTransport();

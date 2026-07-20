@@ -18,6 +18,7 @@ export interface SuccessfulExecution {
     sql: string;
     rows: readonly Row[];
     durationMs: number;
+    unverifiedModels?: readonly string[];
 }
 
 export interface FailedExecution {
@@ -37,6 +38,7 @@ export interface ExecutionMemoryRecord {
     resultShape: ResultShapeColumn[];
     durationMs: number;
     recordedAt: string;
+    unverifiedModels: string[];
 }
 
 interface StoredExecution extends Record<string, unknown> {
@@ -46,6 +48,7 @@ interface StoredExecution extends Record<string, unknown> {
     result_shape: string;
     duration_ms: number;
     recorded_at: string;
+    unverified_models: string;
 }
 
 export class ExecutionMemoryIndex {
@@ -123,6 +126,7 @@ function toStoredExecution(event: SuccessfulExecution): StoredExecution {
         result_shape: JSON.stringify(inferResultShape(event.rows)),
         duration_ms: event.durationMs,
         recorded_at: new Date().toISOString(),
+        unverified_models: JSON.stringify([...new Set(event.unverifiedModels ?? [])].sort()),
     };
 }
 
@@ -134,6 +138,7 @@ function fromStoredExecution(row: StoredExecution): ExecutionMemoryRecord {
         resultShape: JSON.parse(String(row.result_shape)) as ResultShapeColumn[],
         durationMs: Number(row.duration_ms),
         recordedAt: String(row.recorded_at),
+        unverifiedModels: JSON.parse(String(row.unverified_models)) as string[],
     };
 }
 

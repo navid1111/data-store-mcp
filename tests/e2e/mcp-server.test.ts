@@ -74,6 +74,7 @@ metrics:
         principal: 'e2e-analyst',
         semantic: { path: configDir },
         audit: { path: auditPath },
+        memory: { path: join(configDir, 'memory') },
         limits: { maxResultBytes: 4 * 1024 * 1024, timeoutMs: 750 },
         sources: [
           {
@@ -262,6 +263,33 @@ metrics:
   });
 
   describe('error handling', () => {
+    it('search_context labels prior art, warns on unverified models, and handles empty memory', async () => {
+      expect(payload(await client.callTool({
+        name: 'search_context',
+        arguments: { query: 'catalog film total' },
+      }))).toEqual({ precedents: [] });
+
+      await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          question: 'How many catalog films are there?',
+          sql: 'SELECT count(*)::int AS count FROM film',
+        },
+      });
+      const searched = payload(await client.callTool({
+        name: 'search_context',
+        arguments: { query: 'How many catalog films are there?' },
+      }));
+
+      expect(searched.precedents[0]).toEqual(expect.objectContaining({
+        label: expect.stringMatching(/PRIOR ART.*not ground truth/i),
+        question: 'How many catalog films are there?',
+        warning: expect.stringMatching(/UNVERIFIED MODEL.*film/i),
+        unverifiedModels: ['film'],
+      }));
+    });
+
     // T0.11 criterion 1 — resolves with isError, does not reject.
     it('returns isError for an unknown connectionId', async () => {
       const res: any = await client.callTool({

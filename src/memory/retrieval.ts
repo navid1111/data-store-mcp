@@ -135,7 +135,10 @@ function fuse(
                 ...(vectorComponent ? { vector: vectorComponent } : {}),
             },
         };
-    }).sort((left, right) =>
+    }).filter((result) =>
+        (result.components.bm25?.score ?? 0) > 0 ||
+        (result.components.vector?.score ?? 0) > 0)
+        .sort((left, right) =>
         right.score - left.score || left.record.id.localeCompare(right.record.id))
         .slice(0, options.limit);
 }
