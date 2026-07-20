@@ -6,8 +6,9 @@ import {
     Row,
     TableRelation,
 } from "./database-source.js";
-import type { ColumnInfo, TableInfo } from "./sources/types.js";
-import { assertValidIdentifier } from "./identifiers.js";
+import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
+import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js";
+import { profileSqlColumns } from "./sources/profile-sql.js";
 import sql from 'mssql';
 
 export class MssqlDatabase extends Database<MssqlConnectionConfig> {
@@ -169,6 +170,26 @@ export class MssqlDatabase extends Database<MssqlConnectionConfig> {
             ...(r.default_value != null ? { defaultValue: String(r.default_value) } : {}),
             ...(r.comment != null ? { comment: String(r.comment) } : {}),
         }));
+    }
+
+    async profile(
+        table: string,
+        columns?: string[],
+        options?: ProfileOptions,
+    ): Promise<ColumnProfile[]> {
+        const all = await this.getSchema(table);
+        const selected = columns ? all.filter((c) => columns.includes(c.name)) : all;
+
+        // T-SQL quotes identifiers with [brackets], but also accepts the ANSI
+        // double-quote form used here when QUOTED_IDENTIFIER is ON (the
+        // default for the mssql driver). Untested — SQL Server is deferred.
+        return profileSqlColumns({
+            quote: quotePostgresIdentifier,
+            query: (sql) => this.query(sql),
+            table,
+            columns: selected,
+            options,
+        });
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {

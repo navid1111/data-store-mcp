@@ -1,7 +1,8 @@
 
 import { Database, PostgresConnectionConfig, Row, TableRelation } from "./database-source.js";
-import type { ColumnInfo, TableInfo } from "./sources/types.js";
-import { assertValidIdentifier } from "./identifiers.js";
+import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
+import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js";
+import { profileSqlColumns } from "./sources/profile-sql.js";
 import pg from 'pg';
 
 /**
@@ -121,6 +122,25 @@ export class PostgresDatabase extends Database<PostgresConnectionConfig> {
         `, [SCHEMA, tableName ?? null]);
 
         return rows.map(toColumnInfo);
+    }
+
+    async profile(
+        table: string,
+        columns?: string[],
+        options?: ProfileOptions,
+    ): Promise<ColumnProfile[]> {
+        const all = await this.getSchema(table);
+        const selected = columns
+            ? all.filter((c) => columns.includes(c.name))
+            : all;
+
+        return profileSqlColumns({
+            quote: quotePostgresIdentifier,
+            query: (sql) => this.query(sql),
+            table,
+            columns: selected,
+            options,
+        });
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {

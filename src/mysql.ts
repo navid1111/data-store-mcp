@@ -1,7 +1,8 @@
 
 import { Database, MysqlConnectionConfig, Row, TableRelation } from "./database-source.js";
-import type { ColumnInfo, TableInfo } from "./sources/types.js";
-import { assertValidIdentifier } from "./identifiers.js";
+import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
+import { assertValidIdentifier, quoteMysqlIdentifier } from "./identifiers.js";
+import { profileSqlColumns } from "./sources/profile-sql.js";
 import mysql from 'mysql2/promise';
 
 export class MysqlDatabase extends Database<MysqlConnectionConfig> {
@@ -119,6 +120,23 @@ export class MysqlDatabase extends Database<MysqlConnectionConfig> {
       ...(r.default_value != null ? { defaultValue: String(r.default_value) } : {}),
       ...(r.comment != null ? { comment: String(r.comment) } : {}),
     }));
+  }
+
+  async profile(
+    table: string,
+    columns?: string[],
+    options?: ProfileOptions,
+  ): Promise<ColumnProfile[]> {
+    const all = await this.getSchema(table);
+    const selected = columns ? all.filter((c) => columns.includes(c.name)) : all;
+
+    return profileSqlColumns({
+      quote: quoteMysqlIdentifier,
+      query: (sql) => this.query(sql),
+      table,
+      columns: selected,
+      options,
+    });
   }
 
   async getRelations(databaseName?: string): Promise<TableRelation[]> {

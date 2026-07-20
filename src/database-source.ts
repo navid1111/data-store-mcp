@@ -10,7 +10,7 @@ export type {
     ProfileOptions,
 } from "./sources/types.js";
 export { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
-import type { TableInfo, ColumnInfo } from "./sources/types.js";
+import type { TableInfo, ColumnInfo, ColumnProfile, ProfileOptions } from "./sources/types.js";
 
 export type DatabaseType = "mysql" | "postgres" | "sqlserver" | "mongodb";
 
@@ -106,4 +106,14 @@ export abstract class Database<C extends ConnectionConfig = ConnectionConfig> {
     abstract getSchema(tableName?: string): Promise<ColumnInfo[]>;
 
     abstract getRelations(databaseName?: string): Promise<TableRelation[]>;
+
+    /**
+     * Statistical profile of a table's columns (spec.md R3.8).
+     * With no `columns`, profiles every column of the table.
+     */
+    abstract profile(
+        table: string,
+        columns?: string[],
+        options?: ProfileOptions,
+    ): Promise<ColumnProfile[]>;
 }

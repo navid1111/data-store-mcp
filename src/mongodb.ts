@@ -5,7 +5,8 @@ import {
     QueryParams,
     TableRelation,
 } from "./database-source.js";
-import type { ColumnInfo, TableInfo } from "./sources/types.js";
+import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
+import { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
 
 type MongoOperation = "find" | "findOne" | "aggregate" | "countDocuments" | "distinct";
 
@@ -181,6 +182,54 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
             throw new Error("Database not connected");
         }
         return this.db;
+    }
+
+    async profile(
+        table: string,
+        columns?: string[],
+        options?: ProfileOptions,
+    ): Promise<ColumnProfile[]> {
+        const db = this.requireDb();
+        const opts = { ...DEFAULT_PROFILE_OPTIONS, ...options };
+        const collection = db.collection(table);
+
+        const fields = columns ?? (await this.describeCollection(table)).map((c) => c.name);
+        const total = await collection.estimatedDocumentCount();
+
+        return Promise.all(
+            fields.map(async (field): Promise<ColumnProfile> => {
+                // $group in-engine rather than pulling values into Node, for
+                // the same reason the SQL path uses count(distinct ...).
+                const grouped = await collection
+                    .aggregate([
+                        { $match: { [field]: { $ne: null } } },
+                        { $group: { _id: `$${field}`, frequency: { $sum: 1 } } },
+                        { $sort: { frequency: -1 } },
+                        { $limit: opts.maxDistinctForTopValues + 1 },
+                    ])
+                    .toArray();
+
+                const nonNull = grouped.reduce((sum, g) => sum + Number(g.frequency), 0);
+                const distinctCount = grouped.length;
+
+                const profile: ColumnProfile = {
+                    table,
+                    column: field,
+                    distinctCount,
+                    nullRate: total === 0 ? 0 : Math.max(0, (total - nonNull) / total),
+                };
+
+                // Omitted rather than truncated above the cutoff — the extra
+                // element fetched above is what detects "more than the cutoff".
+                if (distinctCount > 0 && distinctCount <= opts.maxDistinctForTopValues) {
+                    profile.topValues = grouped
+                        .slice(0, opts.topValueLimit)
+                        .map((g) => ({ value: g._id, count: Number(g.frequency) }));
+                }
+
+                return profile;
+            })
+        );
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {

@@ -40,11 +40,11 @@ column is what to work through.
 | 4 | 0.3 | Fix identifier injection in `getSchema` — Postgres `WHERE table_name = '...'`, MySQL `DESCRIBE ...` | B10 | 0.8 | **done** |
 | 5 | 0.11 | Return tool execution failures as `isError` results instead of throwing | B14, R2.2 | 0.10 | **done** |
 | 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | **done** |
-| 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | |
-| 8 | 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional | B12 | 0.4 | |
-| 9 | 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9, B13 | 0.4 | |
-| 10 | 0.6 | Extend introspection: PK, unique, defaults, **DB comments** | B8, §5.1 | 0.5 | |
-| 11 | 0.7 | Implement `profile()` for Postgres + MySQL | R3.8 | 0.5 | |
+| 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | **done** |
+| 8 | 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional | B12 | 0.4 | **done** |
+| 9 | 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9, B13 | 0.4 | **done** |
+| 10 | 0.6 | Extend introspection: PK, unique, defaults, **DB comments** | B8, §5.1 | 0.5 | **done** |
+| 11 | 0.7 | Implement `profile()` for Postgres + MySQL | R3.8 | 0.5 | **done** |
 
 Every task above has an explicit pass/fail specification in [test.md](test.md), keyed by
 the same ID.
@@ -55,7 +55,7 @@ the same ID.
 ./scripts/fetch-fixtures.sh   # Pagila + Sakila dumps -> fixtures/ (gitignored)
 npm run db:up                 # compose up, waits for data to actually be loaded
 npm run build                 # e2e suite spawns dist/server.js
-npm test                      # 43 passing, 9 todo
+npm test                      # 208 passing, 3 skipped, 2 todo
 ```
 
 Two layers of coverage, and the distinction matters: `tests/integration/` drives the
@@ -84,6 +84,10 @@ them.
 
 **Done when:** all three adapters return an identical `getSchema` shape including PKs and
 comments, `profile()` returns top-N values for a low-cardinality column, and CI is green.
+
+**Phase 0 complete.** 208 tests passing. Remaining GAP tests are `GAP B1` (SQL Server
+deferred by design) and `GAP B2` (unbounded query — closed by Phase 1), plus two
+`it.todo`s that belong to tasks 1.3 and 1.5.
 
 **Note:** 0.3 turned out to be more than the "one-line fix" originally estimated — MySQL's
 `DESCRIBE` takes an identifier, which cannot be bound as a parameter, so it needed a
