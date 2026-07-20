@@ -59,8 +59,24 @@ export function createQueryPlan(input: QueryPlanInput): QueryPlan {
 
 /** Options an adapter honours while executing a plan. */
 export interface ExecuteOptions {
-    /** Milliseconds before the query is cancelled at the driver. Task 1.6. */
+    /** Milliseconds before the engine cancels the query. */
     timeoutMs?: number;
     /** Maximum serialized result size in bytes. Task 1.10. */
     maxBytes?: number;
+}
+
+/** spec.md R1.3. */
+export const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * Timeouts are set with `SET`, which takes no bind parameters, so the value
+ * is interpolated. Validating it as a positive integer is what keeps that
+ * safe — the same reasoning as identifiers.ts.
+ */
+export function resolveTimeoutMs(options?: ExecuteOptions): number {
+    const value = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    if (!Number.isInteger(value) || value <= 0) {
+        throw new RangeError(`timeoutMs must be a positive integer, got ${value}`);
+    }
+    return value;
 }

@@ -3,7 +3,8 @@ import { Database, PostgresConnectionConfig, Row, TableRelation } from "./databa
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js";
 import { profileSqlColumns } from "./sources/profile-sql.js";
-import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
+import { resolveTimeoutMs, type ExecuteOptions, type QueryPlan } from "./governance/plan.js";
+import { timeout as governanceTimeout } from "./governance/errors.js";
 import pg from 'pg';
 
 /**
@@ -48,9 +49,28 @@ export class PostgresDatabase extends Database<PostgresConnectionConfig> {
         return result.rows;
     }
 
-    async execute(plan: QueryPlan, _options?: ExecuteOptions): Promise<Row[]> {
-        const result = await this.pool.query(plan.sql, [...plan.params]);
-        return result.rows;
+    async execute(plan: QueryPlan, options?: ExecuteOptions): Promise<Row[]> {
+        const timeoutMs = resolveTimeoutMs(options);
+
+        // A dedicated client, because statement_timeout is session state: set
+        // on the pool it would leak to unrelated queries. Postgres cancels the
+        // backend itself, so this is real cancellation rather than an
+        // abandoned promise, and the connection stays usable afterwards.
+        const client = await this.pool.connect();
+        try {
+            await client.query(`SET statement_timeout = ${timeoutMs}`);
+            const result = await client.query(plan.sql, [...plan.params]);
+            return result.rows;
+        } catch (error) {
+            // 57014 = query_canceled
+            if ((error as { code?: string })?.code === '57014') {
+                throw governanceTimeout(timeoutMs);
+            }
+            throw error;
+        } finally {
+            await client.query('SET statement_timeout = 0').catch(() => undefined);
+            client.release();
+        }
     }
 
     async listTables(): Promise<TableInfo[]> {

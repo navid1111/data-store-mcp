@@ -3,7 +3,8 @@ import { Database, MysqlConnectionConfig, Row, TableRelation } from "./database-
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { assertValidIdentifier, quoteMysqlIdentifier } from "./identifiers.js";
 import { profileSqlColumns } from "./sources/profile-sql.js";
-import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
+import { resolveTimeoutMs, type ExecuteOptions, type QueryPlan } from "./governance/plan.js";
+import { timeout as governanceTimeout } from "./governance/errors.js";
 import mysql from 'mysql2/promise';
 
 export class MysqlDatabase extends Database<MysqlConnectionConfig> {
@@ -25,12 +26,33 @@ export class MysqlDatabase extends Database<MysqlConnectionConfig> {
     return rows as Row[];
   }
 
-  async execute(plan: QueryPlan, _options?: ExecuteOptions): Promise<Row[]> {
+  async execute(plan: QueryPlan, options?: ExecuteOptions): Promise<Row[]> {
     if (!this.connection) {
       throw new Error("Database not connected");
     }
-    const [rows] = await this.connection.execute(plan.sql, [...plan.params]);
-    return rows as Row[];
+
+    const timeoutMs = resolveTimeoutMs(options);
+
+    // max_execution_time is enforced by the server, so the query is genuinely
+    // cancelled and the connection survives. Caveat: MySQL exempts SLEEP()
+    // and non-read-only statements from it — the latter cannot reach here
+    // because the gate refuses writes, but it does mean this is not a
+    // universal wall-clock guarantee the way statement_timeout is.
+    await this.connection.query(`SET SESSION max_execution_time = ${timeoutMs}`);
+    try {
+      const [rows] = await this.connection.execute(plan.sql, [...plan.params]);
+      return rows as Row[];
+    } catch (error) {
+      // 3024 = ER_QUERY_TIMEOUT
+      if ((error as { errno?: number })?.errno === 3024) {
+        throw governanceTimeout(timeoutMs);
+      }
+      throw error;
+    } finally {
+      await this.connection
+        .query('SET SESSION max_execution_time = 0')
+        .catch(() => undefined);
+    }
   }
 
   async listTables(): Promise<TableInfo[]> {
