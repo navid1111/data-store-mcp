@@ -9,6 +9,7 @@ import {
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js";
 import { profileSqlColumns } from "./sources/profile-sql.js";
+import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
 import sql from 'mssql';
 
 export class MssqlDatabase extends Database<MssqlConnectionConfig> {
@@ -71,6 +72,10 @@ export class MssqlDatabase extends Database<MssqlConnectionConfig> {
             console.error('SQL Server query error:', err);
             throw err;
         }
+    }
+
+    async execute(plan: QueryPlan, _options?: ExecuteOptions): Promise<Row[]> {
+        return this.query(plan.sql, [...plan.params]);
     }
 
     async listTables(): Promise<TableInfo[]> {

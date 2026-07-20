@@ -3,6 +3,7 @@ import { Database, MysqlConnectionConfig, Row, TableRelation } from "./database-
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { assertValidIdentifier, quoteMysqlIdentifier } from "./identifiers.js";
 import { profileSqlColumns } from "./sources/profile-sql.js";
+import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
 import mysql from 'mysql2/promise';
 
 export class MysqlDatabase extends Database<MysqlConnectionConfig> {
@@ -21,6 +22,14 @@ export class MysqlDatabase extends Database<MysqlConnectionConfig> {
       throw new Error("Database not connected");
     }
     const [rows] = await this.connection.execute(sql, params);
+    return rows as Row[];
+  }
+
+  async execute(plan: QueryPlan, _options?: ExecuteOptions): Promise<Row[]> {
+    if (!this.connection) {
+      throw new Error("Database not connected");
+    }
+    const [rows] = await this.connection.execute(plan.sql, [...plan.params]);
     return rows as Row[];
   }
 

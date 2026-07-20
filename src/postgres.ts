@@ -3,6 +3,7 @@ import { Database, PostgresConnectionConfig, Row, TableRelation } from "./databa
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js";
 import { profileSqlColumns } from "./sources/profile-sql.js";
+import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
 import pg from 'pg';
 
 /**
@@ -44,6 +45,11 @@ export class PostgresDatabase extends Database<PostgresConnectionConfig> {
 
     async query(sql: string, params?: unknown[]): Promise<Row[]> {
         const result = await this.pool.query(sql, params);
+        return result.rows;
+    }
+
+    async execute(plan: QueryPlan, _options?: ExecuteOptions): Promise<Row[]> {
+        const result = await this.pool.query(plan.sql, [...plan.params]);
         return result.rows;
     }
 

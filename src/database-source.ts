@@ -11,6 +11,7 @@ export type {
 } from "./sources/types.js";
 export { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
 import type { TableInfo, ColumnInfo, ColumnProfile, ProfileOptions } from "./sources/types.js";
+import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
 
 export type DatabaseType = "mysql" | "postgres" | "sqlserver" | "mongodb";
 
@@ -93,7 +94,21 @@ export abstract class Database<C extends ConnectionConfig = ConnectionConfig> {
 
     abstract connect(): Promise<void>;
 
+    /**
+     * Runs internally-generated SQL: introspection and profiling only.
+     *
+     * Caller-supplied SQL must never reach this method — it takes a string and
+     * so applies no governance. Agent queries go through {@link execute},
+     * which accepts only a gate-approved plan. Enforced by
+     * tests/invariant/query-plan.test.ts.
+     */
     abstract query(sql: string, params?: QueryParams): Promise<unknown>;
+
+    /**
+     * Runs a plan approved by the governance gate. The only path by which
+     * caller-supplied SQL reaches a driver (architecture.md §7 invariant 1).
+     */
+    abstract execute(plan: QueryPlan, options?: ExecuteOptions): Promise<unknown>;
 
     /** Tables and views, without their columns. */
     abstract listTables(): Promise<TableInfo[]>;

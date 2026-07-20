@@ -7,6 +7,8 @@ import {
 } from "./database-source.js";
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
+import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
+import { writeForbidden } from "./governance/errors.js";
 
 type MongoOperation = "find" | "findOne" | "aggregate" | "countDocuments" | "distinct";
 
@@ -95,6 +97,19 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
             default:
                 throw new Error(`Unsupported MongoDB operation: ${String(payload.operation)}`);
         }
+    }
+
+    /**
+     * MongoDB has no SQL surface, so a SQL plan is never valid here. Its own
+     * gate — read-only operations, forced $limit, pipeline-stage cap — arrives
+     * with task 1.8; until then agent queries take the ungoverned query()
+     * path, which is why GAP B2 remains open for Mongo.
+     */
+    async execute(_plan: QueryPlan, _options?: ExecuteOptions): Promise<unknown> {
+        throw writeForbidden(
+            'sql-on-mongodb',
+            'MongoDB does not accept SQL plans; use a Mongo query payload.',
+        );
     }
 
     async listTables(): Promise<TableInfo[]> {
