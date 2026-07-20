@@ -1,3 +1,16 @@
+// Introspection shapes live in sources/types.ts; re-exported so existing
+// imports from database-source.js keep working while the layout migrates
+// toward architecture.md §3.
+export type {
+    TableKind,
+    TableInfo,
+    ColumnInfo,
+    ProfileValue,
+    ColumnProfile,
+    ProfileOptions,
+} from "./sources/types.js";
+export { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
+
 export type DatabaseType = "mysql" | "postgres" | "sqlserver" | "mongodb";
 
 /**
