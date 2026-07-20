@@ -1,0 +1,58 @@
+name: Golden evaluation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'semantic/**'
+      - 'queries.yml'
+      - 'src/evaluation/**'
+      - 'src/semantic/**'
+  pull_request:
+    paths:
+      - 'semantic/**'
+      - 'queries.yml'
+      - 'src/evaluation/**'
+      - 'src/semantic/**'
+
+jobs:
+  golden-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Cache fixture dumps
+        uses: actions/cache@v4
+        with:
+          path: fixtures
+          key: fixtures-pagila-sakila-v1
+
+      - name: Start fixture databases
+        run: npm run db:up
+
+      - name: Run blocking golden evaluation
+        run: npm run eval:golden
+
+      - name: Upload pass-rate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-eval-${{ github.run_id }}
+          path: artifacts/golden-eval.json
+          if-no-files-found: error
+
+      - name: Database logs on failure
+        if: failure()
+        run: docker compose logs --tail 100
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval:golden": "node dist/evaluation/run.js",
     "fixtures": "./scripts/fetch-fixtures.sh",
     "db:up": "./scripts/fetch-fixtures.sh && docker compose up -d --wait --wait-timeout 600",
     "db:down": "docker compose down -v",

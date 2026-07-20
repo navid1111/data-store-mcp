@@ -18,6 +18,7 @@ Thumbs.db
 *.swo
 .idea/
 coverage/
+artifacts/
 # Markdown Reports (generated). Project docs are tracked explicitly below.
 *.md
 !README.md
