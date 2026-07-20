@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MysqlDatabase } from '../../src/mysql.js';
 import { InvalidIdentifierError } from '../../src/identifiers.js';
+import { Database } from '../../src/database-source.js';
 import { SAKILA, EXPECTED } from '../helpers/sources.js';
 
 describe('MysqlDatabase / Sakila', () => {
@@ -119,12 +120,16 @@ describe('MysqlDatabase / Sakila', () => {
       expect(parents).toEqual(['actor', 'film']);
     });
 
-    // GAP: the abstract signature is getRelations(databaseName?: string) but
-    // the MySQL override declares it required, so the subclass is not
-    // substitutable for its base type.
-    it('GAP: falls back to the configured database when called with no arg', async () => {
-      const rels = await (db as any).getRelations();
+    // T0.9 — previously required `databaseName`, so this needed an `as any`
+    // cast and MysqlDatabase was not substitutable for Database.
+    it('falls back to the configured database when called with no arg', async () => {
+      const rels = await db.getRelations();
       expect(rels.length).toBeGreaterThan(10);
+    });
+
+    it('is callable through the Database base type without a cast', async () => {
+      const base: Database = db;
+      expect((await base.getRelations()).length).toBeGreaterThan(10);
     });
   });
 });

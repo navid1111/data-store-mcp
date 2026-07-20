@@ -41,7 +41,7 @@ export class MysqlDatabase extends Database<MysqlConnectionConfig> {
     );
   }
 
-  async getRelations(databaseName: string): Promise<TableRelation[]> {
+  async getRelations(databaseName?: string): Promise<TableRelation[]> {
     if (!this.connection) {
       throw new Error("Database not connected");
     }
