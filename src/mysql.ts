@@ -1,5 +1,6 @@
 
 import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
+import { quoteMysqlIdentifier } from "./identifiers.js";
 import mysql from 'mysql2/promise';
 
 export class MysqlDatabase extends Database {
@@ -26,11 +27,18 @@ export class MysqlDatabase extends Database {
       throw new Error("Database not connected");
     }
 
-    const sql = tableName
-      ? `DESCRIBE ${tableName}`
-      : `SELECT table_name FROM information_schema.tables WHERE table_schema = '${this.config.options.database}'`;
+    // `DESCRIBE ?` is not valid SQL — an identifier cannot be bound — so the
+    // table name is validated and backtick-quoted instead. The schema name in
+    // the other branch is config-derived rather than caller-supplied, but is
+    // bound anyway so no branch of this method interpolates a value.
+    if (tableName !== undefined) {
+      return this.query(`DESCRIBE ${quoteMysqlIdentifier(tableName, 'table name')}`);
+    }
 
-    return this.query(sql);
+    return this.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = ?`,
+      [this.config.options.database]
+    );
   }
 
   async getRelations(databaseName: string): Promise<TableRelation[]> {

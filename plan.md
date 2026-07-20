@@ -37,7 +37,7 @@ column is what to work through.
 | 1 | 0.1 | Vitest harness + CI (typecheck, build, test) on push | B6 | — | **done** |
 | 2 | 0.8 | Integration tests per source against Pagila / Sakila / seeded Mongo | B6 | 0.1 | **done** |
 | 3 | 0.10 | E2E test driving the real MCP server over stdio | B6 | 0.8 | **done** |
-| 4 | 0.3 | Fix identifier injection in `getSchema` — Postgres `WHERE table_name = '...'`, MySQL `DESCRIBE ...` | B10 | 0.8 | |
+| 4 | 0.3 | Fix identifier injection in `getSchema` — Postgres `WHERE table_name = '...'`, MySQL `DESCRIBE ...` | B10 | 0.8 | **done** |
 | 5 | 0.11 | Return tool execution failures as `isError` results instead of throwing | B14, R2.2 | 0.10 | |
 | 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | |
 | 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | |
@@ -85,8 +85,9 @@ them.
 **Done when:** all three adapters return an identical `getSchema` shape including PKs and
 comments, `profile()` returns top-N values for a low-cardinality column, and CI is green.
 
-**Note:** 0.3 is a one-line fix on a live injection bug. Do it first, today, regardless of
-the rest of the plan.
+**Note:** 0.3 turned out to be more than the "one-line fix" originally estimated — MySQL's
+`DESCRIBE` takes an identifier, which cannot be bound as a parameter, so it needed a
+validator (`src/identifiers.ts`) rather than parameterization.
 
 ---
 

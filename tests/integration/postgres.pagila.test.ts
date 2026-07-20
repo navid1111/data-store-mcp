@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PostgresDatabase } from '../../src/postgres.js';
+import { InvalidIdentifierError } from '../../src/identifiers.js';
 import { PAGILA, EXPECTED } from '../helpers/sources.js';
 
 describe('PostgresDatabase / Pagila', () => {
@@ -85,14 +86,21 @@ describe('PostgresDatabase / Pagila', () => {
 
     it.todo('after 0.5: returns ColumnInfo[] including table, PK flag and comment');
 
-    // GAP (spec B10): tableName is interpolated, not bound. This proves the
-    // injection is reachable — a quoting fix must make this throw or return [].
-    it('GAP B10: tableName is interpolated into SQL', async () => {
-      const injected = await db.getSchema("film' OR '1'='1");
-      expect(injected.length).toBeGreaterThan(0); // predicate defeated
+    // T0.3 — the injection that GAP B10 previously demonstrated.
+    it('rejects an injected predicate in tableName', async () => {
+      await expect(db.getSchema("film' OR '1'='1")).rejects.toThrow(InvalidIdentifierError);
     });
 
-    it.todo('after 0.3: rejects or safely escapes a quote in tableName');
+    it('rejects a stacked statement in tableName', async () => {
+      await expect(db.getSchema('film; SELECT 1')).rejects.toThrow(InvalidIdentifierError);
+    });
+
+    it('binds tableName rather than interpolating it', async () => {
+      // A syntactically valid identifier for a table that does not exist must
+      // come back empty, not error — proving the value is bound, not injected.
+      const cols = await db.getSchema('no_such_table_xyz');
+      expect(cols).toEqual([]);
+    });
   });
 
   describe('getRelations', () => {

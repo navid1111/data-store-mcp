@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MysqlDatabase } from '../../src/mysql.js';
+import { InvalidIdentifierError } from '../../src/identifiers.js';
 import { SAKILA, EXPECTED } from '../helpers/sources.js';
 
 describe('MysqlDatabase / Sakila', () => {
@@ -90,13 +91,22 @@ describe('MysqlDatabase / Sakila', () => {
 
     it.todo('after 0.5: getSchema returns ColumnInfo[] and listTables returns TableInfo[]');
 
-    // GAP: `DESCRIBE ${tableName}` is interpolated. Identifiers cannot be bound
-    // as parameters, so the fix is quoting/allowlisting, not parameterization.
-    it('GAP B10: tableName is interpolated into DESCRIBE', async () => {
-      await expect(db.getSchema('film; SELECT 1')).rejects.toThrow();
+    // T0.3 — criterion 2 requires a *validation* error, not a driver syntax
+    // error. A driver error would mean the string still reached the server.
+    it('rejects a stacked statement in tableName before reaching the driver', async () => {
+      await expect(db.getSchema('film; SELECT 1')).rejects.toThrow(InvalidIdentifierError);
     });
 
-    it.todo('after 0.3: quotes or rejects identifiers containing metacharacters');
+    it('rejects a backtick escape in tableName', async () => {
+      await expect(db.getSchema('film`; DROP TABLE film; --')).rejects.toThrow(
+        InvalidIdentifierError
+      );
+    });
+
+    it('leaves the fixture intact after a rejected injection', async () => {
+      const rows = await db.query('SELECT count(*) AS count FROM film');
+      expect(Number(rows[0].count)).toBe(EXPECTED.film);
+    });
   });
 
   describe('getRelations', () => {

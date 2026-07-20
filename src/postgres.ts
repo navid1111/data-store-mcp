@@ -1,5 +1,6 @@
 
 import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
+import { assertValidIdentifier } from "./identifiers.js";
 import pg from 'pg';
 
 export class PostgresDatabase extends Database {
@@ -25,13 +26,21 @@ export class PostgresDatabase extends Database {
     }
 
     async getSchema(tableName?: string): Promise<any> {
+        // Validated for a consistent contract across adapters, and bound as a
+        // parameter so the value never reaches the query string. Either alone
+        // would close the injection; both keep the behaviour uniform with
+        // MySQL, where binding is impossible (see identifiers.ts).
+        if (tableName !== undefined) {
+            assertValidIdentifier(tableName, 'table name');
+        }
+
         const sql = `
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns
-            WHERE table_schema = 'public' 
-            ${tableName ? `AND table_name = '${tableName}'` : ''}
+            WHERE table_schema = 'public'
+            ${tableName ? 'AND table_name = $1' : ''}
         `;
-        return this.query(sql);
+        return this.query(sql, tableName ? [tableName] : undefined);
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {
