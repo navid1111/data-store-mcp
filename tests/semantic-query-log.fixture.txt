@@ -1,0 +1,7 @@
+SELECT f.title, l.name FROM film f JOIN language l ON f.language_id = l.language_id WHERE f.rating = 'PG-13';
+SELECT f.rating, COUNT(*) FROM film f JOIN language l ON f.language_id = l.language_id WHERE f.rating = 'PG-13' GROUP BY f.rating;
+SELECT COUNT(*) FROM film f JOIN language l ON f.language_id = l.language_id WHERE f.rating = 'PG-13';
+SELECT fa.actor_id, f.title FROM film_actor fa JOIN film f ON fa.film_id = f.film_id WHERE f.rating = 'G';
+SELECT fa.actor_id, COUNT(fa.film_id) FROM film_actor fa JOIN film f ON fa.film_id = f.film_id WHERE f.rating = 'G' GROUP BY fa.actor_id;
+SELECT title FROM film WHERE length > 120;
+THIS IS NOT VALID SQL

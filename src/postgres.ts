@@ -1,12 +1,37 @@
 
-import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
-import { assertValidIdentifier } from "./identifiers.js";
+import { Database, PostgresConnectionConfig, Row, TableRelation } from "./database-source.js";
+import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
+import { assertValidIdentifier, quotePostgresIdentifier } from "./identifiers.js";
+import { profileSqlColumns } from "./sources/profile-sql.js";
+import { resolveTimeoutMs, type ExecuteOptions, type QueryPlan } from "./governance/plan.js";
+import { timeout as governanceTimeout } from "./governance/errors.js";
+import { ResultByteAccumulator, resolveMaxBytes } from "./execution/result-size.js";
 import pg from 'pg';
 
-export class PostgresDatabase extends Database {
+/**
+ * Only the default schema is introspected. Multi-schema support is a separate
+ * concern from the uniform-shape work in task 0.5.
+ */
+const SCHEMA = 'public';
+
+function toColumnInfo(r: Row): ColumnInfo {
+    return {
+        table: String(r.table),
+        name: String(r.name),
+        dataType: String(r.data_type),
+        nullable: Boolean(r.nullable),
+        isPrimaryKey: Boolean(r.is_primary_key),
+        isUnique: Boolean(r.is_unique),
+        position: Number(r.position),
+        ...(r.default_value != null ? { defaultValue: String(r.default_value) } : {}),
+        ...(r.comment != null ? { comment: String(r.comment) } : {}),
+    };
+}
+
+export class PostgresDatabase extends Database<PostgresConnectionConfig, QueryPlan> {
     private pool: pg.Pool;
 
-    constructor(config: ConnectionConfig) {
+    constructor(config: PostgresConnectionConfig) {
         super(config);
         this.pool = new pg.Pool(config.options);
     }
@@ -20,12 +45,100 @@ export class PostgresDatabase extends Database {
         }
     }
 
-    async query(sql: string, params?: any): Promise<any> {
+    async query(sql: string, params?: unknown[]): Promise<Row[]> {
         const result = await this.pool.query(sql, params);
         return result.rows;
     }
 
-    async getSchema(tableName?: string): Promise<any> {
+    async execute(plan: QueryPlan, options?: ExecuteOptions): Promise<Row[]> {
+        const timeoutMs = resolveTimeoutMs(options);
+        const rows = new ResultByteAccumulator<Row>(resolveMaxBytes(options));
+
+        // A dedicated client, because statement_timeout is session state: set
+        // on the pool it would leak to unrelated queries. Postgres cancels the
+        // backend itself, so this is real cancellation rather than an
+        // abandoned promise, and the connection stays usable afterwards.
+        const client = await this.pool.connect();
+        let released = false;
+        try {
+            await client.query(`SET statement_timeout = ${timeoutMs}`);
+            const query = new pg.Query<Row>({
+                text: plan.sql,
+                values: [...plan.params],
+            });
+
+            return await new Promise<Row[]>((resolve, reject) => {
+                let settled = false;
+
+                const fail = (error: unknown) => {
+                    if (settled) return;
+                    settled = true;
+                    reject(error);
+                };
+
+                query.on('row', (row) => {
+                    if (settled) return;
+                    try {
+                        rows.add(row);
+                    } catch (error) {
+                        // Destroying the dedicated client stops the backend and
+                        // prevents the remaining rows from crossing into Node.
+                        released = true;
+                        client.release(true);
+                        fail(error);
+                    }
+                });
+                query.on('error', fail);
+                query.on('end', () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve(rows.result());
+                });
+
+                client.query(query);
+            });
+        } catch (error) {
+            // 57014 = query_canceled
+            if ((error as { code?: string })?.code === '57014') {
+                throw governanceTimeout(timeoutMs);
+            }
+            throw error;
+        } finally {
+            if (!released) {
+                await client.query('SET statement_timeout = 0').catch(() => undefined);
+                client.release();
+            }
+        }
+    }
+
+    async listTables(): Promise<TableInfo[]> {
+        const rows = await this.query(`
+            SELECT
+                c.relname                                    AS name,
+                n.nspname                                    AS schema,
+                CASE WHEN c.relkind IN ('v', 'm') THEN 'view'
+                     ELSE 'table' END                        AS kind,
+                obj_description(c.oid)                       AS comment,
+                CASE WHEN c.reltuples < 0 THEN NULL
+                     ELSE c.reltuples::bigint END            AS estimated_row_count
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'v', 'm')
+            ORDER BY c.relname
+        `, [SCHEMA]);
+
+        return rows.map((r) => ({
+            name: String(r.name),
+            schema: String(r.schema),
+            kind: r.kind === 'view' ? ('view' as const) : ('table' as const),
+            ...(r.comment != null ? { comment: String(r.comment) } : {}),
+            ...(r.estimated_row_count != null
+                ? { estimatedRowCount: Number(r.estimated_row_count) }
+                : {}),
+        }));
+    }
+
+    async getSchema(tableName?: string): Promise<ColumnInfo[]> {
         // Validated for a consistent contract across adapters, and bound as a
         // parameter so the value never reaches the query string. Either alone
         // would close the injection; both keep the behaviour uniform with
@@ -34,13 +147,64 @@ export class PostgresDatabase extends Database {
             assertValidIdentifier(tableName, 'table name');
         }
 
-        const sql = `
-            SELECT column_name, data_type, is_nullable
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-            ${tableName ? 'AND table_name = $1' : ''}
-        `;
-        return this.query(sql, tableName ? [tableName] : undefined);
+        // pg_catalog rather than information_schema: `col_description` needs
+        // the pg_class oid, and pg_index reports every column of a composite
+        // primary key rather than only the first.
+        const rows = await this.query(`
+            SELECT
+                c.relname                             AS table,
+                a.attname                             AS name,
+                format_type(a.atttypid, a.atttypmod)  AS data_type,
+                NOT a.attnotnull                      AS nullable,
+                a.attnum                              AS position,
+                pg_get_expr(ad.adbin, ad.adrelid)     AS default_value,
+                col_description(c.oid, a.attnum)      AS comment,
+                COALESCE(pk.hit, false)               AS is_primary_key,
+                COALESCE(uq.hit, false)               AS is_unique
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_attribute a
+              ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+            LEFT JOIN pg_attrdef ad ON ad.adrelid = c.oid AND ad.adnum = a.attnum
+            LEFT JOIN LATERAL (
+                SELECT true AS hit FROM pg_index i
+                WHERE i.indrelid = c.oid AND i.indisprimary
+                  AND a.attnum = ANY (i.indkey::smallint[])
+                LIMIT 1
+            ) pk ON true
+            LEFT JOIN LATERAL (
+                SELECT true AS hit FROM pg_index i
+                WHERE i.indrelid = c.oid AND i.indisunique
+                  AND array_length(i.indkey::smallint[], 1) = 1
+                  AND a.attnum = ANY (i.indkey::smallint[])
+                LIMIT 1
+            ) uq ON true
+            WHERE n.nspname = $1
+              AND c.relkind IN ('r', 'p', 'v', 'm')
+              AND ($2::text IS NULL OR c.relname = $2)
+            ORDER BY c.relname, a.attnum
+        `, [SCHEMA, tableName ?? null]);
+
+        return rows.map(toColumnInfo);
+    }
+
+    async profile(
+        table: string,
+        columns?: string[],
+        options?: ProfileOptions,
+    ): Promise<ColumnProfile[]> {
+        const all = await this.getSchema(table);
+        const selected = columns
+            ? all.filter((c) => columns.includes(c.name))
+            : all;
+
+        return profileSqlColumns({
+            quote: quotePostgresIdentifier,
+            query: (sql) => this.query(sql),
+            table,
+            columns: selected,
+            options,
+        });
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {

@@ -10,11 +10,22 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { tools } from './mcp/tools/index.js';
 import { toToolErrorResult } from './mcp/errors.js';
+import { loadConfig } from './config/load.js';
+import { SourceRegistry } from './sources/registry.js';
+import { AuditLog } from './audit/log.js';
+import type { ConnectionConfig } from './database-source.js';
+import { SemanticRegistry } from './semantic/registry.js';
+import { ExecutionMemoryIndex } from './memory/index.js';
+import { HybridMemoryRetriever } from './memory/retrieval.js';
+import { HashEmbeddingProvider } from './memory/embedding.js';
+import { parsePrincipal, type Principal } from './auth/principal.js';
+import { invokeToolHandler } from './mcp/invoke.js';
+import { PolicyEngine } from './governance/policy.js';
 
 /**
  * Create and configure the MCP server
  */
-function createServer(): Server {
+export function createServer(principal: Principal): Server {
   const server = new Server(
     {
       name: 'data-store-mcp',
@@ -50,7 +61,7 @@ function createServer(): Server {
     }
 
     try {
-      const result = await tool.handler(args || {});
+      const result = await invokeToolHandler(tool.handler, args || {}, principal);
       return {
         content: [
           {
@@ -72,13 +83,51 @@ function createServer(): Server {
  * Start the server
  */
 async function main() {
-  const server = createServer();
+  const config = await loadConfig();
+  const principal = parsePrincipal(config.audit.principal, 'stdio startup configuration');
+  const auditLog = await AuditLog.open({
+    ...config.audit,
+    secrets: credentialSecrets(config.sources),
+  });
+  const semanticRegistry = await SemanticRegistry.load(config.semanticPath);
+  const memoryIndex = config.memoryPath
+    ? await ExecutionMemoryIndex.open(config.memoryPath)
+    : undefined;
+  const memoryRetriever = memoryIndex
+    ? new HybridMemoryRetriever(memoryIndex, new HashEmbeddingProvider())
+    : undefined;
+  await SourceRegistry.initialize(
+    config.sources,
+    config.execution,
+    auditLog,
+    semanticRegistry,
+    memoryIndex,
+    memoryRetriever,
+    config.policies ? new PolicyEngine(config.policies) : undefined,
+  );
+
+  const server = createServer(principal);
   const transport = new StdioServerTransport();
   
   await server.connect(transport);
   
   // eslint-disable-next-line no-console
   console.error('data-store-mcp MCP server running on stdio with database support');
+}
+
+function credentialSecrets(sources: ConnectionConfig[]): string[] {
+  return sources.flatMap((source) => {
+    if (source.type !== 'mongodb') return [source.options.password];
+
+    try {
+      const password = new URL(source.options.uri).password;
+      return password ? [password, decodeURIComponent(password)] : [];
+    } catch {
+      // connect() reports an invalid URI during startup; audit setup must not
+      // echo it while trying to extract a redaction value.
+      return [];
+    }
+  });
 }
 
 main().catch((error) => {

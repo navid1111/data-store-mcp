@@ -1,6 +1,6 @@
 
 import { z } from 'zod';
-import { ConnectionManager } from '../../connection-utils.js';
+import { SourceRegistry } from '../../sources/registry.js';
 
 export const inspectDatabaseTool = {
     name: 'inspect_database',
@@ -24,31 +24,43 @@ export const inspectDatabaseTool = {
 
         const parsed = schema.parse(args);
         const connectionId = parsed.connectionId;
-        const db = ConnectionManager.getInstance().getConnection(connectionId);
+        const db = SourceRegistry.getInstance().getSource(connectionId);
 
         if (!db) {
-            throw new Error(`Connection with ID ${connectionId} not found`);
+            throw new Error(`Source not found: ${connectionId}`);
         }
 
-        const [schemaResult, relations] = await Promise.all([
+        const [tables, columns, relations] = await Promise.all([
+            db.listTables(),
             db.getSchema(parsed.name),
-            db.getRelations()
+            db.getRelations(),
         ]);
 
-        if (db.config.type === 'mongodb') {
-            return {
-                connectionId,
-                type: db.config.type,
-                database: db.config.options.database,
-                collections: schemaResult,
-                relationships: relations,
-            };
+        // Columns are nested under their table rather than returned as a flat
+        // list. A flat list was unattributable when no table was named (B7):
+        // the agent received 50+ columns with no way to tell them apart.
+        const byTable = new Map<string, typeof columns>();
+        for (const column of columns) {
+            const existing = byTable.get(column.table);
+            if (existing) {
+                existing.push(column);
+            } else {
+                byTable.set(column.table, [column]);
+            }
         }
+
+        const selected = parsed.name
+            ? tables.filter((t) => t.name === parsed.name)
+            : tables;
 
         return {
             connectionId,
             type: db.config.type,
-            tables: schemaResult,
+            database: db.config.options.database,
+            tables: selected.map((table) => ({
+                ...table,
+                columns: byTable.get(table.name) ?? [],
+            })),
             relations,
         };
     },

@@ -1,0 +1,27 @@
+{
+  "principal": "local-analyst",
+  "semantic": {
+    "path": "./semantic"
+  },
+  "audit": {
+    "path": "./data-store-mcp.audit.jsonl"
+  },
+  "limits": {
+    "maxResultBytes": 10485760,
+    "timeoutMs": 30000
+  },
+  "sources": [
+    {
+      "name": "analytics",
+      "type": "postgres",
+      "description": "Read-only analytics warehouse",
+      "options": {
+        "host": "127.0.0.1",
+        "port": 5432,
+        "user": "analytics_reader",
+        "password": "${ANALYTICS_DB_PASSWORD}",
+        "database": "analytics"
+      }
+    }
+  ]
+}

@@ -18,6 +18,7 @@ Thumbs.db
 *.swo
 .idea/
 coverage/
+artifacts/
 # Markdown Reports (generated). Project docs are tracked explicitly below.
 *.md
 !README.md
@@ -27,6 +28,7 @@ coverage/
 !test.md
 !instructions.md
 !docs/**/*.md
+!skills/**/*.md
 # Added by code-review-graph
 .code-review-graph/
 graphify-out/

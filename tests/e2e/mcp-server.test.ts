@@ -3,17 +3,20 @@
  * speaks real MCP over stdio, and drives the published tools against the
  * Pagila and Sakila fixtures.
  *
- * This is the only suite that exercises the tool layer (registry, zod schemas,
- * ConnectionManager, response envelope). The adapter suites bypass all of it.
+ * This is the only suite that exercises startup config, the source registry,
+ * tool schemas, and the response envelope. Adapter suites bypass all of it.
  *
  * Requires `npm run build` first — see the global setup guard below.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { PAGILA, SAKILA, EXPECTED } from '../helpers/sources.js';
+import { PAGILA, SAKILA, MONGO, EXPECTED } from '../helpers/sources.js';
+import { seedMongo } from '../helpers/seed-mongo.js';
 
 /** Tool results come back as a text envelope containing JSON. */
 function payload(result: any): any {
@@ -23,20 +26,120 @@ function payload(result: any): any {
 
 describe('MCP server (stdio) / Pagila + Sakila', () => {
   let client: Client;
+  let configDir: string;
+  let auditPath: string;
 
   beforeAll(async () => {
     if (!existsSync('dist/server.js')) {
       throw new Error('dist/server.js missing — run `npm run build` first');
     }
 
+    await seedMongo();
+    configDir = mkdtempSync(join(tmpdir(), 'data-store-mcp-e2e-'));
+    const configPath = join(configDir, 'config.json');
+    auditPath = join(configDir, 'audit.jsonl');
+    const semanticPath = join(configDir, 'semantic.yml');
+    writeFileSync(semanticPath, `models:
+  - name: film
+    description: Film catalog.
+    provenance: introspection
+    source: e2e-pagila
+    table: film
+    columns:
+      - name: film_id
+        description: Film identifier.
+        provenance: introspection
+        dataType: integer
+      - name: title
+        description: Film title.
+        provenance: db_comment
+        dataType: text
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+          topValues:
+            - value: ACADEMY DINOSAUR
+              count: 1
+      - name: replacement_cost
+        description: Internal replacement cost.
+        provenance: human
+        dataType: numeric
+metrics:
+  - name: film_count
+    description: Number of films.
+    provenance: human
+    verified: true
+    model: film
+    expression: COUNT(film_id)
+`);
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        principal: '${E2E_PRINCIPAL}',
+        semantic: { path: configDir },
+        audit: { path: auditPath },
+        memory: { path: join(configDir, 'memory') },
+        limits: { maxResultBytes: 4 * 1024 * 1024, timeoutMs: 750 },
+        policies: {
+          roles: {
+            analyst: {
+              hiddenColumns: [{
+                name: 'film-internal-cost',
+                model: 'film',
+                columns: ['replacement_cost'],
+              }],
+            },
+          },
+          principals: {
+            'e2e-analyst': { roles: ['analyst'] },
+          },
+        },
+        sources: [
+          {
+            name: 'e2e-pagila',
+            type: 'postgres',
+            description: 'Pagila fixture',
+            options: PAGILA.options,
+          },
+          {
+            name: 'e2e-sakila',
+            type: 'mysql',
+            description: 'Sakila fixture',
+            options: SAKILA.options,
+          },
+          {
+            name: 'e2e-mongo',
+            type: 'mongodb',
+            description: 'Mongo fixture',
+            options: MONGO.options,
+          },
+        ],
+      }),
+    );
+
+    const inheritedEnv = Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] =>
+        typeof entry[1] === 'string'
+      ),
+    );
+
     client = new Client({ name: 'e2e-test', version: '1.0.0' }, { capabilities: {} });
     await client.connect(
-      new StdioClientTransport({ command: 'node', args: ['dist/server.js'] })
+      new StdioClientTransport({
+        command: 'node',
+        args: ['dist/server.js'],
+        env: {
+          ...inheritedEnv,
+          DATA_STORE_MCP_CONFIG: configPath,
+          E2E_PRINCIPAL: 'e2e-analyst',
+        },
+      }),
     );
   }, 60_000);
 
   afterAll(async () => {
     await client?.close();
+    if (configDir) rmSync(configDir, { recursive: true, force: true });
   });
 
   describe('tools/list', () => {
@@ -44,41 +147,59 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
       expect(names).toEqual([
-        'connect_database',
-        'echo',
-        'inspect_database',
-        'query_database',
+        'describe_model',
+        'dry_plan',
+        'list_metrics',
+        'list_sources',
+        'query',
+        'search_context',
       ]);
+      expect(names).not.toContain('connect_database');
+      expect(names).not.toContain('inspect_database');
+      expect(names).not.toContain('query_database');
+      expect(JSON.stringify(tools.map((tool) => tool.inputSchema))).not.toMatch(/password/i);
     });
 
-    // GAP (spec B1): SQL Server is implemented but the tool enum omits it, so
-    // it is unreachable through MCP. Deferred, but assert it stays deliberate.
-    it('GAP B1: connect_database does not offer sqlserver', async () => {
-      const { tools } = await client.listTools();
-      const connect = tools.find((t) => t.name === 'connect_database')!;
-      const types = (connect.inputSchema as any).properties.type.enum;
-      expect(types).toEqual(['mysql', 'postgres', 'mongodb']);
+    it('list_sources returns safe descriptors for startup-configured sources', async () => {
+      const res = payload(
+        await client.callTool({ name: 'list_sources', arguments: {} }),
+      );
+
+      expect(res.sources).toEqual([
+        { name: 'e2e-mongo', type: 'mongodb', description: 'Mongo fixture' },
+        { name: 'e2e-pagila', type: 'postgres', description: 'Pagila fixture' },
+        { name: 'e2e-sakila', type: 'mysql', description: 'Sakila fixture' },
+      ]);
+      expect(JSON.stringify(res)).not.toMatch(/options|password|uri|host|user/i);
+    });
+
+    it('keeps fixture passwords out of a complete list-and-call transcript', async () => {
+      const listed = await client.listTools();
+      const sources = await client.callTool({ name: 'list_sources', arguments: {} });
+      const queried = await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS ok' },
+      });
+      const transcript = JSON.stringify({ listed, sources, queried });
+
+      for (const password of new Set([
+        PAGILA.options.password,
+        SAKILA.options.password,
+        new URL(MONGO.options.uri).password,
+      ])) {
+        expect(password).not.toBe('');
+        expect(transcript).not.toContain(password);
+      }
     });
   });
 
   describe('postgres / pagila', () => {
     const id = 'e2e-pagila';
 
-    it('connect_database connects to Pagila', async () => {
+    it('query uses the startup-configured source', async () => {
       const res = payload(
         await client.callTool({
-          name: 'connect_database',
-          arguments: { type: 'postgres', id, ...PAGILA.options },
-        })
-      );
-      expect(res.connectionId).toBe(id);
-      expect(res.message).toMatch(/Successfully connected/);
-    });
-
-    it('query_database runs a real query', async () => {
-      const res = payload(
-        await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: id, sql: 'SELECT count(*)::int AS n FROM film' },
         })
       );
@@ -86,48 +207,38 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(res.results[0].n).toBe(EXPECTED.film);
     });
 
-    it('inspect_database returns tables and relations for a named table', async () => {
+    it('describe_model returns descriptions and profiled top values', async () => {
       const res = payload(
         await client.callTool({
-          name: 'inspect_database',
-          arguments: { connectionId: id, name: 'film' },
+          name: 'describe_model',
+          arguments: { name: 'film' },
         })
       );
-      expect(res.tables.map((c: any) => c.column_name)).toContain('title');
-      expect(res.relations.length).toBeGreaterThan(10);
+      expect(res.model.name).toBe('film');
+      expect(res.model.description).toBe('Film catalog.');
+      const title = res.model.columns.find((column: any) => column.name === 'title');
+      expect(title.description).toBe('Film title.');
+      expect(title.profile.topValues).toEqual([{ value: 'ACADEMY DINOSAUR', count: 1 }]);
+      expect(res.model.columns.map((column: any) => column.name)).not.toContain('replacement_cost');
     });
 
-    // GAP (spec B7): with no table name, inspect_database returns every column
-    // in the schema with no table attribution — the agent cannot tell which
-    // table any column belongs to. This is B7 surfacing at the MCP layer.
-    it('GAP B7: inspect_database without a table returns unattributed columns', async () => {
+    it('list_metrics returns documented semantic metrics', async () => {
       const res = payload(
-        await client.callTool({ name: 'inspect_database', arguments: { connectionId: id } })
+        await client.callTool({ name: 'list_metrics', arguments: {} })
       );
-      expect(res.tables.length).toBeGreaterThan(50);
-      expect(res.tables[0]).not.toHaveProperty('table_name');
+      expect(res.metrics).toEqual([
+        expect.objectContaining({ name: 'film_count', description: 'Number of films.' }),
+      ]);
     });
-
-    it.todo('after 0.5: inspect_database returns tables with their columns nested');
   });
 
   describe('mysql / sakila', () => {
     const id = 'e2e-sakila';
 
-    it('connect_database connects to Sakila', async () => {
+    it('query uses the startup-configured source', async () => {
       const res = payload(
         await client.callTool({
-          name: 'connect_database',
-          arguments: { type: 'mysql', id, ...SAKILA.options },
-        })
-      );
-      expect(res.connectionId).toBe(id);
-    });
-
-    it('query_database runs a real query', async () => {
-      const res = payload(
-        await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: id, sql: 'SELECT count(*) AS n FROM film' },
         })
       );
@@ -135,35 +246,89 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(Number(res.results[0].n)).toBe(EXPECTED.film);
     });
 
-    it('inspect_database works (exercises the B12 optional-arg fallback)', async () => {
+  });
+
+  describe('mongodb / seeded fixture', () => {
+    const id = 'e2e-mongo';
+
+    it('routes an unbounded find through the Mongo gate', async () => {
       const res = payload(
         await client.callTool({
-          name: 'inspect_database',
-          arguments: { connectionId: id, name: 'film' },
-        })
+          name: 'query',
+          arguments: {
+            connectionId: id,
+            query: { operation: 'find', collection: 'film' },
+          },
+        }),
       );
-      expect(res.tables.map((c: any) => c.Field)).toContain('title');
-      expect(res.relations.length).toBeGreaterThan(10);
+
+      expect(res.appliedLimit).toBe(1000);
+      expect(res.appliedPolicies).toContain('mongo-read-only');
+      expect(res.query.limit).toBe(1000);
+    });
+
+    it('refuses a writing aggregate stage through the real tool', async () => {
+      const res: any = await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: id,
+          query: {
+            operation: 'aggregate',
+            collection: 'film',
+            pipeline: [{ $out: 'dsm_test_forbidden_output' }],
+          },
+        },
+      });
+
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error.message).toMatch(/\$out.*not permitted/i);
     });
   });
 
   describe('error handling', () => {
+    it('search_context labels prior art, warns on unverified models, and handles empty memory', async () => {
+      expect(payload(await client.callTool({
+        name: 'search_context',
+        arguments: { query: 'catalog film total' },
+      }))).toEqual({ precedents: [] });
+
+      await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          question: 'How many catalog films are there?',
+          sql: 'SELECT count(*)::int AS count FROM film',
+        },
+      });
+      const searched = payload(await client.callTool({
+        name: 'search_context',
+        arguments: { query: 'How many catalog films are there?' },
+      }));
+
+      expect(searched.precedents[0]).toEqual(expect.objectContaining({
+        label: expect.stringMatching(/PRIOR ART.*not ground truth/i),
+        question: 'How many catalog films are there?',
+        warning: expect.stringMatching(/UNVERIFIED MODEL.*film/i),
+        unverifiedModels: ['film'],
+      }));
+    });
+
     // T0.11 criterion 1 — resolves with isError, does not reject.
     it('returns isError for an unknown connectionId', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'nope', sql: 'SELECT 1' },
       });
       expect(res.isError).toBe(true);
       const { error } = JSON.parse(res.content[0].text);
       expect(error.code).toBe('EXECUTION_FAILED');
-      expect(error.message).toMatch(/Connection not found: nope/);
+      expect(error.message).toMatch(/Source not found: nope/);
     });
 
     // T0.11 criterion 2.
     it('returns isError for a SQL source called with no sql', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila' },
       });
       expect(res.isError).toBe(true);
@@ -172,7 +337,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('returns structured field issues for invalid arguments', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 42 },
       });
       expect(res.isError).toBe(true);
@@ -184,7 +349,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     // T0.11 criterion 3 — a driver failure must not kill the server.
     it('survives a driver-level failure and stays usable', async () => {
       const bad: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM no_such_table_xyz' },
       });
       expect(bad.isError).toBe(true);
@@ -193,7 +358,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       // Same client, same connection: the server is still alive and working.
       const good = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS ok' },
         })
       );
@@ -202,55 +367,11 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('does not leak the error message as a generic string', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'nope', sql: 'SELECT 1' },
       });
       // "Tool execution failed" alone gives the agent nothing to act on.
       expect(res.content[0].text).not.toMatch(/^Tool execution failed$/);
-    });
-
-    // T0.11 criterion 5. Uses a malformed Mongo URI specifically because
-    // MongoParseError echoes the connection string verbatim ("Protocol and
-    // host list are required in \"mongodb://user:pw@\""), so this genuinely
-    // exercises redaction. A connection-refused error would not: neither pg
-    // nor mongodb includes credentials on that path, and asserting against it
-    // would pass whether or not redaction existed.
-    it('redacts the password from a driver error that echoes the URI', async () => {
-      const res: any = await client.callTool({
-        name: 'connect_database',
-        arguments: {
-          type: 'mongodb',
-          uri: 'mongodb://dsm:super_secret_pw@',
-          database: 'nope',
-          id: 'e2e-badmongo',
-        },
-      });
-      expect(res.isError).toBe(true);
-      const text = res.content[0].text;
-      // Proves the leaky message reached us and was scrubbed, not that no
-      // message arrived.
-      expect(text).toMatch(/Protocol and host list are required/);
-      expect(text).toContain('mongodb://dsm:***@');
-      expect(text).not.toContain('super_secret_pw');
-    });
-
-    it('leaks no password anywhere in a failed SQL connect', async () => {
-      const res: any = await client.callTool({
-        name: 'connect_database',
-        arguments: {
-          type: 'postgres',
-          host: '127.0.0.1',
-          port: 1,
-          user: 'nobody',
-          password: 'super_secret_pw',
-          database: 'nope',
-          id: 'e2e-badconn',
-        },
-      });
-      expect(res.isError).toBe(true);
-      // Regression guard rather than proof: pg reports ECONNREFUSED without
-      // the password today, so this asserts that stays true.
-      expect(JSON.stringify(res)).not.toContain('super_secret_pw');
     });
 
     // T0.11 criterion 4 — unknown *tool* is legitimately a protocol error and
@@ -261,20 +382,241 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       ).rejects.toThrow(/Unknown tool/);
     });
 
-    // GAP (spec B2): the tool layer applies no row limit and no read-only
-    // guard. This is the Phase 1 hole, demonstrated through the real MCP
-    // surface rather than argued from the source.
-    it('GAP B2: executes an unbounded SELECT with no row cap', async () => {
+    // T1.5 — GAP B2 closed: agent SQL now goes through the governance gate.
+    it('caps an unbounded SELECT at the configured limit', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film' },
         })
       );
-      expect(res.results.length).toBe(EXPECTED.film); // all 1000 rows reach the agent
+      expect(res.results.length).toBe(1000);
+      expect(res.appliedLimit).toBe(1000);
+      expect(res.appliedPolicies).toContain('read-only');
     });
 
-    it.todo('after 1.5: caps result rows at the configured limit');
-    it.todo('after 1.3: refuses INSERT/UPDATE/DELETE/DROP with E_WRITE_FORBIDDEN');
+    it('preserves a caller limit smaller than the default', async () => {
+      const res = payload(
+        await client.callTool({
+          name: 'query',
+          arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film LIMIT 3' },
+        })
+      );
+      expect(res.results).toHaveLength(3);
+      expect(res.appliedLimit).toBe(3);
+    });
+
+    it('returns an error when one row exceeds the configured byte cap', async () => {
+      const res: any = await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: `SELECT repeat('x', 5000000) AS payload`,
+        },
+      });
+
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error.message).toMatch(
+        /Result exceeded the 4194304-byte cap \([4-9][0-9]+ bytes\)/,
+      );
+    });
+
+    // T1.3 through the real MCP surface, with the fixture checked afterwards:
+    // a refusal that still executed would show up as a changed row count.
+    it.each([
+      ['DROP TABLE film'],
+      ['DELETE FROM film'],
+      ['UPDATE film SET title = $$x$$'],
+      ['INSERT INTO film (title) VALUES ($$x$$)'],
+      ['TRUNCATE TABLE film'],
+    ])('refuses %s', async (sql) => {
+      const res: any = await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql },
+      });
+      expect(res.isError).toBe(true);
+    });
+
+    it('refuses a data-modifying CTE that parses as a SELECT', async () => {
+      const res: any = await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: 'WITH x AS (DELETE FROM film RETURNING *) SELECT * FROM x',
+        },
+      });
+      expect(res.isError).toBe(true);
+    });
+
+    it('refuses a multi-statement payload', async () => {
+      const res: any = await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS n; DROP TABLE film' },
+      });
+      expect(res.isError).toBe(true);
+    });
+
+    it('leaves the fixture intact after every refusal', async () => {
+      const res = payload(
+        await client.callTool({
+          name: 'query',
+          arguments: { connectionId: 'e2e-pagila', sql: 'SELECT count(*)::int AS n FROM film' },
+        })
+      );
+      expect(res.results[0].n).toBe(EXPECTED.film);
+    });
+
+    it('appends exactly one complete audit record for every outcome', async () => {
+      const before = readFileSync(auditPath, 'utf8');
+      const beforeRecords = auditRecords(auditPath);
+
+      await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: 'SELECT 42 AS answer',
+          principal: 'admin',
+        },
+      });
+      await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'DELETE FROM film' },
+      });
+      await client.callTool({
+        name: 'query',
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: 'SELECT replacement_cost FROM film',
+        },
+      });
+      await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila' },
+      });
+      await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM audit_missing_table' },
+      });
+      await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT pg_sleep(5)' },
+      });
+
+      const afterText = readFileSync(auditPath, 'utf8');
+      const added = auditRecords(auditPath).slice(beforeRecords.length);
+
+      expect(afterText.startsWith(before)).toBe(true);
+      expect(added).toHaveLength(6);
+      expect(added.map((record) => record.outcome)).toEqual([
+        'success',
+        'denied',
+        'denied',
+        'failure',
+        'failure',
+        'timeout',
+      ]);
+      expect(added.map((record) => record.rowCount)).toEqual([1, 0, 0, 0, 0, 0]);
+
+      for (const record of added) {
+        expect(record.principal).toBe('e2e-analyst');
+        expect(record.source).toBe('e2e-pagila');
+        expect(typeof record.sql).toBe('string');
+        expect(Array.isArray(record.appliedPolicies)).toBe(true);
+        expect(record.appliedPolicies.length).toBeGreaterThan(0);
+        expect(typeof record.durationMs).toBe('number');
+        expect(record.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      }
+      expect(added[0].sql).toMatch(/LIMIT 1000/i);
+      expect(added[0].appliedPolicies).toContain('read-only');
+      expect(added[1].appliedPolicies).toContain('read-only');
+      expect(added[1].denialReason).toMatch(/DELETE is not permitted/i);
+      expect(added[2]).toEqual(expect.objectContaining({
+        appliedPolicies: ['analyst:film-internal-cost'],
+        denialReason: 'Denied by policy: analyst:film-internal-cost',
+        errorCode: 'E_POLICY_DENIED',
+      }));
+      expect(added[3].appliedPolicies).toEqual(['none applied']);
+      expect(added[3]).not.toHaveProperty('denialReason');
+      expect(added[5].errorCode).toBe('E_TIMEOUT');
+
+      for (const password of [
+        PAGILA.options.password,
+        SAKILA.options.password,
+        new URL(MONGO.options.uri).password,
+      ]) {
+        expect(afterText).not.toContain(password);
+      }
+    });
+
+    it('dry_plan resolves MDL without executing or writing an audit record', async () => {
+      const before = auditRecords(auditPath);
+      const res = payload(await client.callTool({
+        name: 'dry_plan',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT title FROM film' },
+      }));
+
+      expect(res.resolvedTables).toEqual(['film']);
+      expect(res.resolvedColumns).toEqual(['film.title']);
+      expect(res.appliedLimit).toBe(1000);
+      expect(res.appliedPolicies).toContain('read-only');
+      expect(res.warnings).toEqual([
+        expect.objectContaining({ code: 'E_UNVERIFIED_MODEL', model: 'film' }),
+      ]);
+      expect(auditRecords(auditPath)).toHaveLength(before.length);
+    });
+
+    it('dry_plan returns structured semantic errors', async () => {
+      const res: any = await client.callTool({
+        name: 'dry_plan',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT titel FROM film' },
+      });
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error).toEqual(
+        expect.objectContaining({ code: 'E_UNKNOWN_COLUMN', didYouMean: ['title'] }),
+      );
+    });
+
+    it('removes hidden columns from dry plans and SELECT star results', async () => {
+      const dry = payload(await client.callTool({
+        name: 'dry_plan',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film' },
+      }));
+      expect(dry.sql).not.toContain('replacement_cost');
+      expect(dry.resolvedColumns).not.toContain('film.replacement_cost');
+      expect(dry.appliedPolicies).toContain('analyst:film-internal-cost');
+
+      const queried = payload(await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film LIMIT 1' },
+      }));
+      expect(Object.keys(queried.results[0])).toEqual(['film_id', 'title']);
+    });
+
+    it('denies explicit hidden columns without leaking them in errors or suggestions', async () => {
+      for (const sql of [
+        'SELECT replacement_cost FROM film',
+        'SELECT replacment_cost FROM film',
+      ]) {
+        const result: any = await client.callTool({
+          name: 'dry_plan',
+          arguments: { connectionId: 'e2e-pagila', sql },
+        });
+        expect(result.isError).toBe(true);
+        const text = result.content[0].text;
+        if (sql.includes('replacement_cost')) {
+          expect(JSON.parse(text).error).toEqual(expect.objectContaining({
+            code: 'E_POLICY_DENIED',
+          }));
+        }
+        expect(text).not.toContain('replacement_cost');
+      }
+    });
   });
 });
+
+function auditRecords(path: string): any[] {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}

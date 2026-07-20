@@ -1,0 +1,13 @@
+// Typechecks tests alongside src. The build config (tsconfig.json) is scoped to
+// src/ with rootDir, so it never checked tests/ — which meant type-level tests
+// like tests/types/*.test-types.ts were silently unverified.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "tests/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

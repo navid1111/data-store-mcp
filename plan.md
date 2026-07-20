@@ -39,12 +39,12 @@ column is what to work through.
 | 3 | 0.10 | E2E test driving the real MCP server over stdio | B6 | 0.8 | **done** |
 | 4 | 0.3 | Fix identifier injection in `getSchema` — Postgres `WHERE table_name = '...'`, MySQL `DESCRIBE ...` | B10 | 0.8 | **done** |
 | 5 | 0.11 | Return tool execution failures as `isError` results instead of throwing | B14, R2.2 | 0.10 | **done** |
-| 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | |
-| 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | |
-| 8 | 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional | B12 | 0.4 | |
-| 9 | 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9, B13 | 0.4 | |
-| 10 | 0.6 | Extend introspection: PK, unique, defaults, **DB comments** | B8, §5.1 | 0.5 | |
-| 11 | 0.7 | Implement `profile()` for Postgres + MySQL | R3.8 | 0.5 | |
+| 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | **done** |
+| 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | **done** |
+| 8 | 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional | B12 | 0.4 | **done** |
+| 9 | 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9, B13 | 0.4 | **done** |
+| 10 | 0.6 | Extend introspection: PK, unique, defaults, **DB comments** | B8, §5.1 | 0.5 | **done** |
+| 11 | 0.7 | Implement `profile()` for Postgres + MySQL | R3.8 | 0.5 | **done** |
 
 Every task above has an explicit pass/fail specification in [test.md](test.md), keyed by
 the same ID.
@@ -55,7 +55,7 @@ the same ID.
 ./scripts/fetch-fixtures.sh   # Pagila + Sakila dumps -> fixtures/ (gitignored)
 npm run db:up                 # compose up, waits for data to actually be loaded
 npm run build                 # e2e suite spawns dist/server.js
-npm test                      # 43 passing, 9 todo
+npm test                      # 208 passing, 3 skipped, 2 todo
 ```
 
 Two layers of coverage, and the distinction matters: `tests/integration/` drives the
@@ -85,6 +85,10 @@ them.
 **Done when:** all three adapters return an identical `getSchema` shape including PKs and
 comments, `profile()` returns top-N values for a low-cardinality column, and CI is green.
 
+**Phase 0 complete.** 208 tests passing. Remaining GAP tests are `GAP B1` (SQL Server
+deferred by design) and `GAP B2` (unbounded query — closed by Phase 1), plus two
+`it.todo`s that belong to tasks 1.3 and 1.5.
+
 **Note:** 0.3 turned out to be more than the "one-line fix" originally estimated — MySQL's
 `DESCRIBE` takes an identifier, which cannot be bound as a parameter, so it needed a
 validator (`src/identifiers.ts`) rather than parameterization.
@@ -98,17 +102,17 @@ unbounded query, and no credential passes through the model.
 
 | ID | Task | Spec | Depends |
 |---|---|---|---|
-| 1.1 | Add `node-sql-parser`; `governance/parse.ts` (SQL → AST, per-dialect) | R2.1 | 0.1 |
-| 1.2 | Structured error taxonomy `governance/errors.ts` | R2.2 | — |
-| 1.3 | Read-only assertion: reject non-`SELECT` roots + multi-statement payloads | R1.2 | 1.1 |
-| 1.4 | Branded `QueryPlan` type; `execute(plan)` replaces `query(sql)` on adapters | arch §5 | 0.4 |
-| 1.5 | Limit injection into AST (respect smaller user limit); hard server ceiling | R1.1 | 1.1, 1.4 |
-| 1.6 | Timeout with real driver-level cancellation | R1.3 | 1.4 |
-| 1.7 | Parameter binding — literals bound, never interpolated | R8.6 | 1.1 |
-| 1.8 | Mongo gate: read-only ops, forced `$limit`, pipeline-stage cap | R1.6 | 1.4 |
-| 1.9 | Config-driven source registry; **delete `connect_database`** | R8.1, R8.2, B4 | 0.2 |
-| 1.10 | Byte cap on result sets | R1.4 | 1.4 |
-| 1.11 | Audit log (append-only, one record per execution incl. failures) | R8.5 | 1.4 |
+| 1.1 | Add `node-sql-parser`; `governance/parse.ts` (SQL → AST, per-dialect) | R2.1 | 0.1 **done** |
+| 1.2 | Structured error taxonomy `governance/errors.ts` | R2.2 | — **done** |
+| 1.3 | Read-only assertion: reject non-`SELECT` roots + multi-statement payloads | R1.2 | 1.1 **done** |
+| 1.4 | Branded `QueryPlan` type; `execute(plan)` replaces `query(sql)` on adapters | arch §5 | 0.4 **done** |
+| 1.5 | Limit injection into AST (respect smaller user limit); hard server ceiling | R1.1 | 1.1, 1.4 **done** |
+| 1.6 | Timeout with real driver-level cancellation | R1.3 | 1.4 **done** |
+| 1.7 | Parameter binding — literals bound, never interpolated | R8.6 | 1.1 **done** |
+| 1.8 | Mongo gate: read-only ops, forced `$limit`, pipeline-stage cap | R1.6 | 1.4 **done** |
+| 1.9 | Config-driven source registry; **delete `connect_database`** | R8.1, R8.2, B4 | 0.2 **done** |
+| 1.10 | Byte cap on result sets | R1.4 | 1.4 **done** |
+| 1.11 | Audit log (append-only, one record per execution incl. failures) | R8.5 | 1.4 **done** |
 
 **Done when:** `DROP TABLE users` and `SELECT * FROM events` are both refused with
 structured errors; no credential appears in any MCP argument or response; every execution
@@ -126,20 +130,20 @@ loudly with hints.
 
 | ID | Task | Spec | Depends |
 |---|---|---|---|
-| 2.1 | MDL types + YAML schema: model, column, relationship, metric, view, cube | R3.2 | — |
-| 2.2 | `semantic/registry.ts` — load, validate, index MDL; `provenance`/`verified` fields | R3.1, R3.6 | 2.1 |
-| 2.3 | Join-path resolution over the relationship graph | R3.4 | 2.2 |
-| 2.4 | MDL → SQL compiler, Postgres + MySQL dialects | R3.4, R2.3 | 2.3, 1.5 |
-| 2.5 | Identifier resolution against registry + `did_you_mean` via edit distance | R2.2 | 2.2, 1.2 |
-| 2.6 | `dry_plan` tool — validate, return plan metadata, no execution | R2.1, R2.4 | 2.5 |
-| 2.7 | Tool surface rework: `list_sources`, `describe_model`, `list_metrics`, `query` | R6.1 | 2.2 |
-| 2.8 | `mdl bootstrap`: introspect + profile → draft YAML, all `verified: false` | R3.7, §5.4 | 0.6, 0.7, 2.2 |
-| 2.9 | LLM drafting of descriptions/metrics inside bootstrap | R3.7, §5.3 | 2.8 |
-| 2.10 | Artifact mining: `pg_stat_statements` / slow log → join patterns, filters, aggregates | R3.10, §5.3 | 2.8 |
-| 2.11 | Relationship inference where FKs are undeclared (name → type → value overlap) | R3.9, B11 | 0.7, 2.8 |
-| 2.12 | `mdl lint` — drift between MDL and live DB | R3.5 | 2.2 |
-| 2.13 | `instructions.md` + `queries.yml` loading | R4.1, R4.2 | 2.2 |
-| 2.14 | Description coverage rule: undescribed model = lint error | R3.3 | 2.12 |
+| 2.1 | MDL types + YAML schema: model, column, relationship, metric, view, cube | R3.2 | — **done** |
+| 2.2 | `semantic/registry.ts` — load, validate, index MDL; `provenance`/`verified` fields | R3.1, R3.6 | 2.1 **done** |
+| 2.3 | Join-path resolution over the relationship graph | R3.4 | 2.2 **done** |
+| 2.4 | MDL → SQL compiler, Postgres + MySQL dialects | R3.4, R2.3 | 2.3, 1.5 **done** |
+| 2.5 | Identifier resolution against registry + `did_you_mean` via edit distance | R2.2 | 2.2, 1.2 **done** |
+| 2.6 | `dry_plan` tool — validate, return plan metadata, no execution | R2.1, R2.4 | 2.5 **done** |
+| 2.7 | Tool surface rework: `list_sources`, `describe_model`, `list_metrics`, `query` | R6.1 | 2.2 **done** |
+| 2.8 | `mdl bootstrap`: introspect + profile → draft YAML, all `verified: false` | R3.7, §5.4 | 0.6, 0.7, 2.2 **done** |
+| 2.9 | LLM drafting of descriptions/metrics inside bootstrap | R3.7, §5.3 | 2.8 **done** |
+| 2.10 | Artifact mining: `pg_stat_statements` / slow log → join patterns, filters, aggregates | R3.10, §5.3 | 2.8 **done** |
+| 2.11 | Relationship inference where FKs are undeclared (name → type → value overlap) | R3.9, B11 | 0.7, 2.8 **done** |
+| 2.12 | `mdl lint` — drift between MDL and live DB | R3.5 | 2.2 **done** |
+| 2.13 | `instructions.md` + `queries.yml` loading | R4.1, R4.2 | 2.2 **done** |
+| 2.14 | Description coverage rule: undescribed model = lint error | R3.3 | 2.12 **done** |
 
 **Done when:** an agent answers a business question through a metric it did not have to
 infer; a hallucinated column returns `did_you_mean`; bootstrapped entities are marked
@@ -157,12 +161,12 @@ if it turns into a project of its own.
 
 | ID | Task | Spec | Depends |
 |---|---|---|---|
-| 3.1 | Golden eval runner over `queries.yml`; pass-rate report | R7.1 | 2.13 |
-| 3.2 | Eval in CI on every MDL change | R7.3 | 3.1 |
-| 3.3 | LanceDB index of successful executions | R5.1 | 1.11 |
-| 3.4 | Hybrid retrieval: BM25 + vector, reciprocal rank fusion | R5.2 | 3.3 |
-| 3.5 | `search_context` tool; precedents labeled as prior art, not truth | R5.3, R6.1 | 3.4 |
-| 3.6 | Promote approved queries into `queries.yml` | R5.4 | 3.5 |
+| 3.1 | Golden eval runner over `queries.yml`; pass-rate report | R7.1 | 2.13 **done** |
+| 3.2 | Eval in CI on every MDL change | R7.3 | 3.1 **done** |
+| 3.3 | LanceDB index of successful executions | R5.1 | 1.11 **done** |
+| 3.4 | Hybrid retrieval: BM25 + vector, reciprocal rank fusion | R5.2 | 3.3 **done** |
+| 3.5 | `search_context` tool; precedents labeled as prior art, not truth | R5.3, R6.1 | 3.4 **done** |
+| 3.6 | Promote approved queries into `queries.yml` | R5.4 | 3.5 **done** |
 | 3.7 | CLI: `serve`, `mdl lint`, `mdl bootstrap`, `query --sql` | R6.2 | 2.12 |
 | 3.8 | `ask` with `--guided` / `--direct` context assembly | R6.4 | 3.4, 3.7 |
 | 3.9 | Guided-vs-direct accuracy benchmark on the golden set | R7.2 | 3.1, 3.8 |

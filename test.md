@@ -344,10 +344,19 @@ Brand implemented but an exported factory lets any module mint one.
 2. User `LIMIT 10` preserved (smaller wins).
 3. User `LIMIT 999999` clamped to the ceiling.
 4. Injected into the AST — assert on the parsed tree, not `sql.includes('LIMIT')`.
-5. Applied to each arm of a `UNION`, and to subqueries that could themselves be huge.
+5. ~~Applied to each arm of a `UNION`, and to subqueries.~~ **Corrected during
+   implementation:** both change results and must *not* be done. A `UNION`'s limit belongs
+   to the union as a whole (the parser attaches it to the last arm, which is where SQL puts
+   it); limiting each arm returns different rows. Truncating a subquery in
+   `WHERE x IN (…)` returns silently wrong rows — the exact "confidently wrong" failure
+   §1 exists to prevent. **Only the outermost statement is limited**, and a test asserts a
+   subquery is left alone.
 6. `appliedLimit` reported on the plan so the agent knows truncation occurred.
+7. Operand order is separator-dependent and must be handled: `LIMIT 1,2` puts the limit
+   *second*, and a bare `OFFSET 5` has no limit at all despite the `offset` separator.
+   Reading index 0 unconditionally clamps the wrong number.
 **FAIL** String concatenation of `' LIMIT n'`; a query already ending in a comment or
-semicolon breaking the rewrite; criterion 2 or 3 missing.
+semicolon breaking the rewrite; criterion 2, 3 or 7 missing.
 
 ### T1.6 — Timeouts
 **Level:** integration · **PASS** `SELECT pg_sleep(5)` with a 1s timeout rejects with

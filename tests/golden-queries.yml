@@ -1,0 +1,16 @@
+queries:
+  - question: Unordered film identifiers
+    sql: SELECT film_id FROM film WHERE film_id IN (1, 2, 3)
+    expected:
+      - film_id: 3
+      - film_id: 1
+      - film_id: 2
+  - question: Ordered film identifiers
+    sql: SELECT film_id FROM film WHERE film_id IN (1, 2, 3) ORDER BY film_id
+    expected:
+      - film_id: 1
+      - film_id: 2
+      - film_id: 3
+  - question: Deliberately broken golden query
+    sql: SELECT no_such_golden_column FROM film
+    expected: []

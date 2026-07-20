@@ -1,0 +1,122 @@
+/** Append-only execution audit log (spec R8.5). */
+
+import { appendFile, mkdir } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { redactSecrets } from '../mcp/errors.js';
+import { parsePrincipal } from '../auth/principal.js';
+
+export type AuditOutcome = 'success' | 'failure' | 'denied' | 'timeout';
+export const NO_POLICIES_APPLIED = 'none applied';
+
+export interface AuditRecordInput {
+    source: string;
+    sql: string;
+    appliedPolicies: readonly string[];
+    rowCount: number;
+    durationMs: number;
+    outcome: AuditOutcome;
+    errorCode?: string;
+    denialReason?: string;
+}
+
+export interface AuditRecord extends AuditRecordInput {
+    timestamp: string;
+    principal: string;
+}
+
+export interface AuditLogOptions {
+    path: string;
+    /** Fixed identity for stdio/CLI deployments. */
+    principal?: string;
+    /** Request-scoped identity for host applications such as HTTP. */
+    principalProvider?: () => string;
+    /** Exact credential values that must never be persisted. */
+    secrets?: readonly string[];
+}
+
+/**
+ * Serializes records through one promise chain, so concurrent executions
+ * cannot interleave JSON. Each record is written with a single append call;
+ * the file is never truncated or rewritten.
+ */
+export class AuditLog {
+    readonly path: string;
+    private readonly principalProvider: () => string;
+    private readonly secrets: readonly string[];
+    private tail: Promise<void> = Promise.resolve();
+
+    private constructor(options: AuditLogOptions) {
+        this.path = resolve(options.path);
+        this.principalProvider = options.principalProvider ?? (() => options.principal!);
+        this.secrets = Object.freeze(
+            [...new Set(options.secrets ?? [])]
+                .filter((secret) => secret.length > 0)
+                .sort((left, right) => right.length - left.length),
+        );
+    }
+
+    /** Ensures the append target is writable without adding an audit record. */
+    static async open(options: AuditLogOptions): Promise<AuditLog> {
+        const hasFixed = options.principal !== undefined;
+        const hasProvider = options.principalProvider !== undefined;
+        if (hasFixed === hasProvider) {
+            throw new Error('Audit log requires exactly one principal or principalProvider.');
+        }
+        if (hasFixed) parsePrincipal(options.principal, 'Audit configuration');
+        if (!options.path.trim()) {
+            throw new Error('Audit path must not be empty.');
+        }
+
+        const log = new AuditLog(options);
+        await mkdir(dirname(log.path), { recursive: true });
+        await appendFile(log.path, '', { encoding: 'utf8', flag: 'a', mode: 0o600 });
+        return log;
+    }
+
+    append(input: AuditRecordInput): Promise<void> {
+        const record: AuditRecord = {
+            timestamp: new Date().toISOString(),
+            principal: this.clean(requiredPrincipal(this.principalProvider())),
+            source: this.clean(input.source),
+            sql: this.clean(input.sql),
+            appliedPolicies: normalizedPolicies(input.appliedPolicies)
+                .map((policy) => this.clean(policy)),
+            rowCount: input.rowCount,
+            durationMs: input.durationMs,
+            outcome: input.outcome,
+            ...(input.errorCode ? { errorCode: this.clean(input.errorCode) } : {}),
+            ...(input.outcome === 'denied' ? {
+                denialReason: this.clean(
+                    input.denialReason ?? 'Denied by governance without a reported reason.',
+                ),
+            } : {}),
+        };
+        const line = `${JSON.stringify(record)}\n`;
+
+        const write = this.tail.then(() =>
+            appendFile(this.path, line, { encoding: 'utf8', flag: 'a', mode: 0o600 }),
+        );
+        // A failed append rejects its caller but does not permanently poison
+        // the queue: later executions still get a chance to record themselves.
+        this.tail = write.catch(() => undefined);
+        return write;
+    }
+
+    private clean(value: string): string {
+        let cleaned = redactSecrets(value);
+        for (const secret of this.secrets) {
+            cleaned = cleaned.split(secret).join('***');
+        }
+        return cleaned;
+    }
+}
+
+function normalizedPolicies(policies: readonly string[]): string[] {
+    const named = [...new Set(policies.filter((policy) =>
+        policy.trim().length > 0 && policy !== NO_POLICIES_APPLIED))];
+    return named.length > 0 ? named : [NO_POLICIES_APPLIED];
+}
+
+function requiredPrincipal(value: string): string {
+    return parsePrincipal(value, 'Audit principal provider');
+}

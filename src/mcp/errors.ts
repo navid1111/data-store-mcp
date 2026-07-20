@@ -15,13 +15,15 @@
  */
 
 import { ZodError } from 'zod';
+import { isGovernanceError, type StructuredError } from '../governance/errors.js';
 
 export type ToolErrorCode = 'INVALID_ARGUMENTS' | 'EXECUTION_FAILED';
 
 export interface ToolErrorPayload {
-  error: {
+  error: (StructuredError | {
     code: ToolErrorCode;
     message: string;
+  }) & {
     issues?: Array<{ path: string; message: string }>;
   };
 }
@@ -47,6 +49,9 @@ export function redactSecrets(text: string): string {
 
 /** Builds the structured payload for a failed tool execution. */
 export function toToolErrorPayload(error: unknown): ToolErrorPayload {
+  if (isGovernanceError(error)) {
+    return { error: error.detail };
+  }
   if (error instanceof ZodError) {
     return {
       error: {

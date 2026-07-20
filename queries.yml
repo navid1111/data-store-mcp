@@ -1,0 +1,16 @@
+queries:
+  - question: First three film identifiers
+    sql: SELECT film_id FROM film WHERE film_id IN (1, 2, 3) ORDER BY film_id
+    expected:
+      - film_id: 1
+      - film_id: 2
+      - film_id: 3
+  - question: Available language identifiers
+    sql: SELECT language_id FROM language ORDER BY language_id
+    expected:
+      - language_id: 1
+      - language_id: 2
+      - language_id: 3
+      - language_id: 4
+      - language_id: 5
+      - language_id: 6
