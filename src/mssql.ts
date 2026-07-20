@@ -12,7 +12,7 @@ import { profileSqlColumns } from "./sources/profile-sql.js";
 import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
 import sql from 'mssql';
 
-export class MssqlDatabase extends Database<MssqlConnectionConfig> {
+export class MssqlDatabase extends Database<MssqlConnectionConfig, QueryPlan> {
     private pool: sql.ConnectionPool | null = null;
 
     constructor(config: MssqlConnectionConfig) {

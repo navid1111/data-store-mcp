@@ -10,6 +10,7 @@ import { MongoDatabase } from '../../src/mongodb.js';
 import type { MongoConnectionConfig, Row } from '../../src/database-source.js';
 import { MONGO } from '../helpers/sources.js';
 import { seedMongo, SEEDED } from '../helpers/seed-mongo.js';
+import { buildMongoPlan } from '../../src/governance/mongo.js';
 
 describe('MongoDatabase / seeded fixture', () => {
   let db: MongoDatabase;
@@ -87,13 +88,71 @@ describe('MongoDatabase / seeded fixture', () => {
     it('rejects an unsupported operation', async () => {
       await expect(
         db.query('', { operation: 'dropDatabase', collection: 'film' })
-      ).rejects.toThrow(/Unsupported MongoDB operation/);
+      ).rejects.toMatchObject({ code: 'E_WRITE_FORBIDDEN' });
     });
 
     it('requires a field for distinct', async () => {
       await expect(
         db.query('', { operation: 'distinct', collection: 'film' })
       ).rejects.toThrow(/require a field/);
+    });
+  });
+
+  describe('governance gate', () => {
+    it('enforces the default find limit in the live driver', async () => {
+      const plan = buildMongoPlan(
+        { operation: 'find', collection: 'film', sort: { film_id: 1 } },
+        { defaultLimit: 3 },
+      );
+      const rows = (await db.execute(plan)) as Row[];
+
+      expect(rows).toHaveLength(3);
+      expect(plan.payload.limit).toBe(3);
+    });
+
+    it.each(['deleteMany', 'insertOne', 'dropDatabase'])(
+      'refuses %s and leaves the fixture intact',
+      async (operation) => {
+        await expect(
+          db.query('', { operation, collection: 'film' }),
+        ).rejects.toMatchObject({ code: 'E_WRITE_FORBIDDEN' });
+
+        expect(
+          await db.query('', { operation: 'countDocuments', collection: 'film' }),
+        ).toBe(SEEDED.films);
+      },
+    );
+
+    it.each(['$out', '$merge'])('refuses an aggregate containing %s', async (stage) => {
+      await expect(
+        db.query('', {
+          operation: 'aggregate',
+          collection: 'film',
+          pipeline: [{ $match: {} }, { [stage]: 'dsm_test_forbidden_output' }],
+        }),
+      ).rejects.toMatchObject({ code: 'E_WRITE_FORBIDDEN' });
+
+      expect((await db.listTables()).map((table) => table.name)).not.toContain(
+        'dsm_test_forbidden_output',
+      );
+    });
+
+    it('rejects an aggregate pipeline over the configured stage cap', () => {
+      const pipeline = Array.from({ length: 4 }, () => ({ $match: {} }));
+
+      expect(() =>
+        buildMongoPlan(
+          { operation: 'aggregate', collection: 'film', pipeline },
+          { maxPipelineStages: 3 },
+        ),
+      ).toThrowError(expect.objectContaining({ code: 'E_POLICY_DENIED' }));
+    });
+
+    it('allows countDocuments without a limit', async () => {
+      const plan = buildMongoPlan({ operation: 'countDocuments', collection: 'film' });
+
+      expect(plan.appliedLimit).toBeNull();
+      await expect(db.execute(plan)).resolves.toBe(SEEDED.films);
     });
   });
 

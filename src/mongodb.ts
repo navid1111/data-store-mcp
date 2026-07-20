@@ -1,4 +1,4 @@
-import { MongoClient, Db, Document, Filter } from "mongodb";
+import { MongoClient, Db, type Document } from "mongodb";
 import {
     Database,
     MongoConnectionConfig,
@@ -7,22 +7,11 @@ import {
 } from "./database-source.js";
 import type { ColumnInfo, ColumnProfile, ProfileOptions, TableInfo } from "./sources/types.js";
 import { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
-import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
-import { writeForbidden } from "./governance/errors.js";
-
-type MongoOperation = "find" | "findOne" | "aggregate" | "countDocuments" | "distinct";
-
-interface MongoQueryPayload {
-    operation: MongoOperation;
-    collection: string;
-    filter?: Filter<Document>;
-    projection?: Document;
-    sort?: Document;
-    limit?: number;
-    skip?: number;
-    pipeline?: Document[];
-    field?: string;
-}
+import type { ExecuteOptions } from "./governance/plan.js";
+import {
+    buildMongoPlan,
+    type MongoQueryPlan,
+} from "./governance/mongo.js";
 
 /** How many documents to sample when inferring a collection's fields. */
 const SAMPLE_SIZE = 100;
@@ -40,7 +29,7 @@ function bsonTypeOf(value: unknown): string {
     return typeof value;
 }
 
-export class MongoDatabase extends Database<MongoConnectionConfig> {
+export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPlan> {
     private client: MongoClient | null = null;
     private db: Db | null = null;
 
@@ -63,12 +52,16 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
     }
 
     async query(queryString: string, params?: QueryParams): Promise<unknown> {
-        if (!this.db) {
-            throw new Error("Database not connected");
-        }
+        // Kept for the internal Database contract, but deliberately gated too:
+        // no alternate caller can use this legacy surface to bypass R1.6.
+        const plan = buildMongoPlan(params ?? queryString);
+        return this.execute(plan);
+    }
 
-        const payload = this.parseQuery(queryString, params);
-        const collection = this.db.collection(payload.collection);
+    async execute(plan: MongoQueryPlan, _options?: ExecuteOptions): Promise<unknown> {
+        const payload = plan.payload;
+        const db = this.requireDb();
+        const collection = db.collection(payload.collection);
 
         switch (payload.operation) {
             case "find":
@@ -86,7 +79,7 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
                     sort: payload.sort,
                 });
             case "aggregate":
-                return collection.aggregate(payload.pipeline || []).toArray();
+                return collection.aggregate([...(payload.pipeline || [])]).toArray();
             case "countDocuments":
                 return collection.countDocuments(payload.filter || {});
             case "distinct":
@@ -97,19 +90,6 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
             default:
                 throw new Error(`Unsupported MongoDB operation: ${String(payload.operation)}`);
         }
-    }
-
-    /**
-     * MongoDB has no SQL surface, so a SQL plan is never valid here. Its own
-     * gate — read-only operations, forced $limit, pipeline-stage cap — arrives
-     * with task 1.8; until then agent queries take the ungoverned query()
-     * path, which is why GAP B2 remains open for Mongo.
-     */
-    async execute(_plan: QueryPlan, _options?: ExecuteOptions): Promise<unknown> {
-        throw writeForbidden(
-            'sql-on-mongodb',
-            'MongoDB does not accept SQL plans; use a Mongo query payload.',
-        );
     }
 
     async listTables(): Promise<TableInfo[]> {
@@ -249,25 +229,6 @@ export class MongoDatabase extends Database<MongoConnectionConfig> {
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {
         return [];
-    }
-
-    private parseQuery(queryString: string, params?: QueryParams): MongoQueryPayload {
-        // Not `as any`: the payload is unvalidated external input, so it is
-        // asserted to the expected shape once, after the guards below.
-        const rawPayload: Record<string, unknown> =
-            params && typeof params === "object" && !Array.isArray(params)
-                ? params
-                : JSON.parse(queryString);
-
-        if (!rawPayload || typeof rawPayload !== "object") {
-            throw new Error("MongoDB query must be an object or JSON object string");
-        }
-
-        if (!rawPayload.operation || !rawPayload.collection) {
-            throw new Error("MongoDB query requires operation and collection");
-        }
-
-        return rawPayload as unknown as MongoQueryPayload;
     }
 
 }

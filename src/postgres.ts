@@ -27,7 +27,7 @@ function toColumnInfo(r: Row): ColumnInfo {
     };
 }
 
-export class PostgresDatabase extends Database<PostgresConnectionConfig> {
+export class PostgresDatabase extends Database<PostgresConnectionConfig, QueryPlan> {
     private pool: pg.Pool;
 
     constructor(config: PostgresConnectionConfig) {

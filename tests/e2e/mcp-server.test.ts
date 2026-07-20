@@ -13,7 +13,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync } from 'node:fs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { PAGILA, SAKILA, EXPECTED } from '../helpers/sources.js';
+import { PAGILA, SAKILA, MONGO, EXPECTED } from '../helpers/sources.js';
+import { seedMongo } from '../helpers/seed-mongo.js';
 
 /** Tool results come back as a text envelope containing JSON. */
 function payload(result: any): any {
@@ -148,6 +149,62 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(res.tables[0].columns.map((c: any) => c.name)).toContain('title');
       expect(res.tables[0].columns[0]).not.toHaveProperty('Field');
       expect(res.relations.length).toBeGreaterThan(10);
+    });
+  });
+
+  describe('mongodb / seeded fixture', () => {
+    const id = 'e2e-mongo';
+
+    beforeAll(async () => {
+      await seedMongo();
+    });
+
+    it('connect_database connects to MongoDB', async () => {
+      const res = payload(
+        await client.callTool({
+          name: 'connect_database',
+          arguments: {
+            type: 'mongodb',
+            id,
+            uri: MONGO.options.uri,
+            database: MONGO.options.database,
+          },
+        }),
+      );
+      expect(res.connectionId).toBe(id);
+    });
+
+    it('routes an unbounded find through the Mongo gate', async () => {
+      const res = payload(
+        await client.callTool({
+          name: 'query_database',
+          arguments: {
+            connectionId: id,
+            query: { operation: 'find', collection: 'film' },
+          },
+        }),
+      );
+
+      expect(res.appliedLimit).toBe(1000);
+      expect(res.appliedPolicies).toContain('mongo-read-only');
+      expect(res.query.limit).toBe(1000);
+    });
+
+    it('refuses a writing aggregate stage through the real tool', async () => {
+      const res: any = await client.callTool({
+        name: 'query_database',
+        arguments: {
+          connectionId: id,
+          query: {
+            operation: 'aggregate',
+            collection: 'film',
+            pipeline: [{ $out: 'dsm_test_forbidden_output' }],
+          },
+        },
+      });
+
+      expect(res.isError).toBe(true);
+      expect(JSON.parse(res.content[0].text).error.message).toMatch(/\$out.*not permitted/i);
     });
   });
 

@@ -32,7 +32,7 @@ const files = sourceFiles(SRC).map((path) => ({
 
 const inGovernance = (path: string) => path.split(sep)[0] === 'governance';
 
-describe('invariant 2: only governance constructs a QueryPlan', () => {
+describe('invariant 2: only governance constructs an executable plan', () => {
   it('finds no createQueryPlan call outside src/governance/', () => {
     const offenders = files
       .filter((f) => !inGovernance(f.path))
@@ -43,11 +43,11 @@ describe('invariant 2: only governance constructs a QueryPlan', () => {
   });
 
   it('finds no cast that forges a plan', () => {
-    // `as unknown as QueryPlan` is the one escape hatch the brand cannot
+    // A double cast is the one escape hatch the brands cannot
     // close, so it is banned by convention and checked here.
     const offenders = files
       .filter((f) => !inGovernance(f.path))
-      .filter((f) => /as\s+unknown\s+as\s+QueryPlan/.test(f.text))
+      .filter((f) => /as\s+unknown\s+as\s+(?:MongoQueryPlan|QueryPlan)/.test(f.text))
       .map((f) => f.path);
 
     expect(offenders).toEqual([]);
@@ -72,15 +72,12 @@ describe('invariant 1: no tool passes a string to a driver', () => {
   // internally-generated introspection SQL only. A tool reaching it with
   // agent input would be an ungoverned path to the driver.
   //
-  // MongoDB is the one remaining caller: it has no SQL surface, so it cannot
-  // use a QueryPlan until task 1.8 gives it its own gate. Pinned by name
-  // rather than allowed by pattern, so a second offender fails the test.
-  it('finds no tool calling the raw query() path except the documented Mongo case', () => {
+  it('finds no tool calling the raw query() path', () => {
     const offenders = toolFiles
       .filter((f) => /\bdb\.query\s*\(|\bdatabase\.query\s*\(/.test(f.text))
       .map((f) => f.path);
 
-    expect(offenders).toEqual([join('mcp', 'tools', 'query.ts')]);
+    expect(offenders).toEqual([]);
   });
 
   it('routes SQL sources through the gate', () => {
@@ -89,5 +86,9 @@ describe('invariant 1: no tool passes a string to a driver', () => {
     expect(queryTool.text).toMatch(/db\.execute\(/);
   });
 
-  it.todo('after 1.8: Mongo goes through its own gate and no tool calls query()');
+  it('routes MongoDB through its gate and branded execute path', () => {
+    const queryTool = toolFiles.find((f) => f.path.endsWith(join('tools', 'query.ts')))!;
+    expect(queryTool.text).toMatch(/buildMongoPlan\(/);
+    expect(queryTool.text).toMatch(/db\.execute\(plan\)/);
+  });
 });

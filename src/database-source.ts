@@ -12,6 +12,10 @@ export type {
 export { DEFAULT_PROFILE_OPTIONS } from "./sources/types.js";
 import type { TableInfo, ColumnInfo, ColumnProfile, ProfileOptions } from "./sources/types.js";
 import type { ExecuteOptions, QueryPlan } from "./governance/plan.js";
+import type { MongoQueryPlan } from "./governance/mongo.js";
+
+/** Every branded plan accepted by the common Database boundary. */
+export type ExecutionPlan = QueryPlan | MongoQueryPlan;
 
 export type DatabaseType = "mysql" | "postgres" | "sqlserver" | "mongodb";
 
@@ -85,7 +89,10 @@ export interface TableRelation {
  * Generic in its config so each adapter sees only its own options shape while
  * `Database` (unparameterized) remains usable as the common base type.
  */
-export abstract class Database<C extends ConnectionConfig = ConnectionConfig> {
+export abstract class Database<
+    C extends ConnectionConfig = ConnectionConfig,
+    P extends ExecutionPlan = ExecutionPlan,
+> {
     config: C;
 
     constructor(config: C) {
@@ -105,10 +112,10 @@ export abstract class Database<C extends ConnectionConfig = ConnectionConfig> {
     abstract query(sql: string, params?: QueryParams): Promise<unknown>;
 
     /**
-     * Runs a plan approved by the governance gate. The only path by which
-     * caller-supplied SQL reaches a driver (architecture.md §7 invariant 1).
+     * Runs a plan approved by a governance gate. The only path by which a
+     * caller-supplied query reaches a driver (architecture.md §7 invariant 1).
      */
-    abstract execute(plan: QueryPlan, options?: ExecuteOptions): Promise<unknown>;
+    abstract execute(plan: P, options?: ExecuteOptions): Promise<unknown>;
 
     /** Tables and views, without their columns. */
     abstract listTables(): Promise<TableInfo[]>;

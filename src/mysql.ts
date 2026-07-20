@@ -7,7 +7,7 @@ import { resolveTimeoutMs, type ExecuteOptions, type QueryPlan } from "./governa
 import { timeout as governanceTimeout } from "./governance/errors.js";
 import mysql from 'mysql2/promise';
 
-export class MysqlDatabase extends Database<MysqlConnectionConfig> {
+export class MysqlDatabase extends Database<MysqlConnectionConfig, QueryPlan> {
   private connection: mysql.Connection | null = null;
 
   constructor(config: MysqlConnectionConfig) {

@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { ConnectionManager } from '../../connection-utils.js';
 import { buildPlan, dialectFor } from '../../governance/gate.js';
+import { buildMongoPlan } from '../../governance/mongo.js';
 
 export const queryDatabaseTool = {
     name: 'query_database',
@@ -49,18 +50,18 @@ export const queryDatabaseTool = {
         }
 
         if (db.config.type === 'mongodb') {
-            // Ungoverned until task 1.8 adds the Mongo gate (read-only ops,
-            // forced $limit, pipeline-stage cap).
-            const mongoQuery = getMongoQueryPayload(parsed.sql, parsed.query);
-            const structure = await db.getSchema(mongoQuery.collection);
-            const results = await db.query(parsed.sql || '{}', parsed.query);
+            const plan = buildMongoPlan(parsed.query ?? parsed.sql);
+            const structure = await db.getSchema(plan.payload.collection);
+            const results = await db.execute(plan);
 
             return {
                 connectionId: parsed.connectionId,
                 type: db.config.type,
                 database: db.config.options.database,
                 structure,
-                query: mongoQuery,
+                query: plan.payload,
+                appliedLimit: plan.appliedLimit,
+                appliedPolicies: plan.appliedPolicies,
                 results,
             };
         }
@@ -84,17 +85,3 @@ export const queryDatabaseTool = {
         };
     },
 };
-
-function getMongoQueryPayload(sql?: string, query?: Record<string, unknown>): Record<string, any> {
-    const payload = query || (sql ? JSON.parse(sql) : undefined);
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        throw new Error('MongoDB queries require a query object or JSON object string');
-    }
-
-    if (typeof payload.collection !== 'string' || !payload.collection) {
-        throw new Error('MongoDB queries require collection');
-    }
-
-    return payload;
-}
