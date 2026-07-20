@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { PAGILA } from '../helpers/sources.js';
+import { ExecutionMemoryIndex } from '../../src/memory/index.js';
 
 interface CliResult {
   code: number | null;
@@ -14,12 +15,17 @@ interface CliResult {
 let directory: string;
 let configPath: string;
 let bootstrapPath: string;
+let llmStubPath: string;
+let promptCapturePath: string;
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'data-store-mcp-cli-'));
   configPath = join(directory, 'config.json');
   bootstrapPath = join(directory, 'generated', 'pagila.yml');
+  llmStubPath = join(directory, 'llm-stub.mjs');
+  promptCapturePath = join(directory, 'prompts.jsonl');
   const semanticPath = join(directory, 'semantic');
+  const memoryPath = join(directory, 'memory');
   await mkdir(semanticPath);
   await writeFile(join(semanticPath, 'semantic.yml'), `models:
   - name: film
@@ -35,11 +41,37 @@ beforeAll(async () => {
         verified: true
         dataType: integer
 `, 'utf8');
+  await writeFile(join(directory, 'instructions.md'),
+    '# Query rules\nUse reviewed catalog definitions.\n', 'utf8');
+  await writeFile(join(directory, 'queries.yml'), `queries:
+  - question: How many films are available?
+    sql: SELECT COUNT(*) AS film_count FROM film
+`, 'utf8');
+  await writeFile(llmStubPath, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+let prompt = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => { prompt += chunk; });
+process.stdin.on('end', () => {
+  appendFileSync(process.env.DSM_LLM_CAPTURE, JSON.stringify(prompt) + '\\n');
+  process.stdout.write('stubbed CLI answer\\n');
+});
+`, 'utf8');
+  await chmod(llmStubPath, 0o700);
+  const memory = await ExecutionMemoryIndex.open(memoryPath);
+  await memory.recordExecution({
+    success: true,
+    question: 'Count available films',
+    sql: 'SELECT COUNT(*) AS film_count FROM film',
+    rows: [{ film_count: 1000 }],
+    durationMs: 5,
+  });
+  memory.close();
   await writeFile(configPath, JSON.stringify({
     principal: 'cli-test',
     semantic: { path: semanticPath },
     audit: { path: join(directory, 'audit.jsonl') },
-    memory: { path: join(directory, 'memory') },
+    memory: { path: memoryPath },
     limits: { maxResultBytes: 1024 * 1024, timeoutMs: 5_000 },
     sources: [{
       name: 'cli-pagila',
@@ -60,6 +92,7 @@ describe('dsm CLI core commands', () => {
       ['serve', '--help'],
       ['mdl', 'lint', '--help'],
       ['mdl', 'bootstrap', '--help'],
+      ['ask', '--help'],
       ['query', '--help'],
     ];
 
@@ -70,6 +103,36 @@ describe('dsm CLI core commands', () => {
       expect(result.stderr, command.join(' ')).toBe('');
     }
   });
+
+  it('passes different guided and direct prompts to a configured LLM command', async () => {
+    await rm(promptCapturePath, { force: true });
+    const question = 'How many films are available?';
+    const environment = { DSM_LLM_CAPTURE: promptCapturePath };
+    const guided = await runCli([
+      'ask', question, '--guided', '--config', configPath, '--project', directory,
+      '--llm-command', llmStubPath, '--json',
+    ], environment);
+    const direct = await runCli([
+      'ask', '--direct', question, '--llm-command', llmStubPath, '--json',
+    ], environment);
+
+    expect(guided.code).toBe(0);
+    expect(guided.stderr).toBe('');
+    expect(JSON.parse(guided.stdout)).toEqual({ mode: 'guided', response: 'stubbed CLI answer' });
+    expect(direct.code).toBe(0);
+    expect(direct.stderr).toBe('');
+    expect(JSON.parse(direct.stdout)).toEqual({ mode: 'direct', response: 'stubbed CLI answer' });
+
+    const prompts = (await readFile(promptCapturePath, 'utf8'))
+      .trim().split('\n').map((line) => JSON.parse(line) as string);
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toContain('## Visible semantic schema');
+    expect(prompts[0]).toContain('Film identifier.');
+    expect(prompts[0]).toContain('Use reviewed catalog definitions.');
+    expect(prompts[0]).toContain('Count available films');
+    expect(prompts[1]).toBe(question);
+    expect(prompts[0]).not.toBe(prompts[1]);
+  }, 60_000);
 
   it('validates server startup dependencies and exits cleanly in check mode', async () => {
     const result = await runCli(['serve', '--config', configPath, '--check', '--json']);
@@ -122,6 +185,7 @@ describe('dsm CLI core commands', () => {
       ['serve', '--config', join(directory, 'missing.json'), '--check'],
       ['mdl', 'lint', '--config', configPath, '--source', 'cli-pagila'],
       ['mdl', 'bootstrap', '--config', configPath, '--source', 'cli-pagila'],
+      ['ask', 'question'],
       ['query', '--config', configPath, '--source', 'cli-pagila', '--sql', 'DELETE FROM film'],
     ];
 
@@ -134,11 +198,11 @@ describe('dsm CLI core commands', () => {
   }, 60_000);
 });
 
-function runCli(args: string[]): Promise<CliResult> {
+function runCli(args: string[], environment: NodeJS.ProcessEnv = {}): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['dist/cli/index.js', ...args], {
       cwd: process.cwd(),
-      env: process.env,
+      env: { ...process.env, ...environment },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

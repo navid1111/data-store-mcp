@@ -15,8 +15,15 @@ import { executeWithAudit } from '../audit/execution.js';
 import { SemanticRegistry } from '../semantic/registry.js';
 import { ExecutionMemoryIndex } from '../memory/index.js';
 import { toToolErrorPayload } from '../mcp/errors.js';
+import { askQuestion, type GuidedAskContext } from '../orchestrator/ask.js';
+import { CommandPromptClient } from '../orchestrator/command-client.js';
+import { loadProjectContext } from '../orchestrator/context.js';
+import { HybridMemoryRetriever } from '../memory/retrieval.js';
+import { HashEmbeddingProvider } from '../memory/embedding.js';
 
 type OptionValue = string | boolean;
+
+const BOOLEAN_OPTIONS = new Set(['help', 'json', 'check', 'guided', 'direct']);
 
 interface ParsedArguments {
     options: Map<string, OptionValue>;
@@ -29,6 +36,7 @@ Commands:
   serve                 Start the MCP stdio server
   mdl lint              Check an MDL artifact against its live source
   mdl bootstrap         Generate a draft MDL artifact from a live source
+  ask <question>        Ask through guided or direct prompting
   query --sql <sql>     Execute governed, read-only SQL
 
 Run "dsm <command> --help" for command-specific options.
@@ -53,6 +61,14 @@ Introspects and profiles a configured source into a reviewable MDL YAML artifact
 Executes SQL only after the read-only governance gate has approved and limited it.
 --json writes one machine-readable JSON document to stdout.
 `,
+    ask: `Usage: dsm ask <question> (--guided|--direct) [options]
+
+Options:
+  --config <path>       Runtime config containing semantic and memory paths
+  --project <path>      Directory containing instructions.md and queries.yml (default: cwd)
+  --llm-command <path>  Executable that reads the prompt from stdin and writes a response
+  --json                Write the mode and response as machine-readable JSON
+`,
 } as const;
 
 export async function runCli(argv: string[]): Promise<number> {
@@ -67,10 +83,68 @@ export async function runCli(argv: string[]): Promise<number> {
             return runServe(rest);
         case 'mdl':
             return runMdl(rest);
+        case 'ask':
+            return runAsk(rest);
         case 'query':
             return runQuery(rest);
         default:
             throw new Error(`Unknown command "${command}". Run "dsm --help" for usage.`);
+    }
+}
+
+async function runAsk(argv: string[]): Promise<number> {
+    const parsed = parseArguments(argv);
+    assertKnownOptions(parsed, [
+        'guided', 'direct', 'config', 'project', 'llm-command', 'json', 'help',
+    ]);
+    if (hasOption(parsed, 'help')) {
+        writeStdout(HELP.ask);
+        return 0;
+    }
+    if (parsed.positionals.length !== 1) {
+        throw new Error('ask requires exactly one question argument.');
+    }
+    const guidedMode = hasOption(parsed, 'guided');
+    const directMode = hasOption(parsed, 'direct');
+    if (guidedMode === directMode) {
+        throw new Error('ask requires exactly one of --guided or --direct.');
+    }
+
+    const client = new CommandPromptClient(optionalString(parsed, 'llm-command'));
+    let memory: ExecutionMemoryIndex | undefined;
+    try {
+        let guided: GuidedAskContext | undefined;
+        if (guidedMode) {
+            const config = await loadConfig(optionalString(parsed, 'config'));
+            const semantic = await SemanticRegistry.load(config.semanticPath);
+            const project = await loadProjectContext(optionalString(parsed, 'project') ?? process.cwd());
+            memory = config.memoryPath
+                ? await ExecutionMemoryIndex.open(config.memoryPath)
+                : undefined;
+            guided = {
+                semantic,
+                project,
+                ...(memory ? {
+                    retriever: new HybridMemoryRetriever(memory, new HashEmbeddingProvider()),
+                } : {}),
+                // The policy engine supplies this set once Phase 4 is active.
+                // Keeping it explicit here makes prompt assembly fail-closed.
+                hiddenColumns: new Set<string>(),
+            };
+        }
+        const result = await askQuestion(parsed.positionals[0], {
+            mode: guidedMode ? 'guided' : 'direct',
+            client,
+            ...(guided ? { guided } : {}),
+        });
+        if (hasOption(parsed, 'json')) {
+            writeData({ mode: result.mode, response: result.response }, parsed);
+        } else {
+            writeStdout(`${result.response}\n`);
+        }
+        return 0;
+    } finally {
+        memory?.close();
     }
 }
 
@@ -291,6 +365,10 @@ function parseArguments(argv: string[]): ParsedArguments {
         }
         const name = argument.slice(2);
         if (!name || options.has(name)) throw new Error(`Invalid or duplicate option: ${argument}`);
+        if (BOOLEAN_OPTIONS.has(name)) {
+            options.set(name, true);
+            continue;
+        }
         const next = argv[index + 1];
         if (next !== undefined && !next.startsWith('--')) {
             options.set(name, next);
