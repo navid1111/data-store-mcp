@@ -5,11 +5,13 @@ import { dirname } from 'node:path';
 import type { ColumnInfo, ColumnProfile, Database, ProfileOptions, TableInfo } from '../database-source.js';
 import { parseMdlYaml, stringifyMdlYaml } from './schema.js';
 import type { Column, MdlDocument, Model, SemanticScalar } from './types.js';
+import { draftMdl, type DraftOptions } from './draft.js';
 
 export interface BootstrapOptions {
     source: string;
     outputPath: string;
     profile?: ProfileOptions;
+    draft?: DraftOptions;
 }
 
 export interface BootstrapResult {
@@ -41,13 +43,16 @@ export async function bootstrapMdl(
         models.push(toModel(options.source, table, columns, profiles));
     }
 
-    const document: MdlDocument = {
+    const structuralDocument: MdlDocument = {
         models,
         relationships: [],
         metrics: [],
         views: [],
         cubes: [],
     };
+    const document = options.draft
+        ? await draftMdl(structuralDocument, options.draft)
+        : structuralDocument;
     const yaml = stringifyMdlYaml(document);
     // Parse our own output before it can touch disk. Bootstrap must never emit
     // an artifact the runtime registry would later reject.

@@ -13,7 +13,9 @@ const semanticScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 const entityFields = {
     name: nonEmpty,
-    description: nonEmpty,
+    // Description coverage is a lint rule (task 2.14), not a parse rule. An
+    // empty draft must remain reviewable instead of crashing bootstrap.
+    description: z.string(),
     provenance: provenanceSchema,
     // Unreviewed is the safe default. Only a human edit may opt into true.
     verified: z.boolean().default(false),
