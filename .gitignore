@@ -18,9 +18,17 @@ Thumbs.db
 *.swo
 .idea/
 coverage/
-# Markdown Reports
+# Markdown Reports (generated). Project docs are tracked explicitly below.
 *.md
 !README.md
+!spec.md
+!plan.md
+!architecture.md
+!instructions.md
+!docs/**/*.md
 # Added by code-review-graph
 .code-review-graph/
 graphify-out/
+
+# Downloaded test fixtures (Pagila / Sakila dumps) — see scripts/fetch-fixtures.sh
+fixtures/

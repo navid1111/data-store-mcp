@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # The e2e suite spawns `node dist/server.js`, so the build must precede it.
+      - run: npm run build
+
+      # docker compose rather than `services:` — the fixture databases need the
+      # dumps in fixtures/ mounted as init scripts, and service containers start
+      # before the checkout exists.
+      - name: Cache fixture dumps
+        uses: actions/cache@v4
+        with:
+          path: fixtures
+          key: fixtures-pagila-sakila-v1
+
+      - name: Start fixture databases
+        run: npm run db:up
+
+      - run: npm test
+
+      - name: Database logs on failure
+        if: failure()
+        run: docker compose logs --tail 100
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

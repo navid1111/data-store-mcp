@@ -1,0 +1,74 @@
+# Test fixtures for integration tests (plan.md task 0.8).
+#
+#   ./scripts/fetch-fixtures.sh   # download Pagila + Sakila dumps
+#   npm run db:up                 # start and wait for data to be loaded
+#
+# Host ports are deliberately non-default to avoid colliding with any local
+# Postgres/MySQL/Mongo install.
+#
+# Healthchecks query an actual fixture table rather than using pg_isready /
+# mysqladmin ping: both entrypoints run init scripts against a temporary local
+# server before opening the real port, so a liveness probe goes green while the
+# dataset is still loading. Querying `film` is the only reliable readiness signal.
+
+name: data-store-mcp-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # Must be `postgres`: pagila-schema.sql contains hardcoded
+      # `ALTER ... OWNER TO postgres`, which fails if the role doesn't exist.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dsm_test_pw
+      POSTGRES_DB: pagila
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./fixtures/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "psql -U postgres -d pagila -c 'SELECT 1 FROM film LIMIT 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    tmpfs:
+      - /var/lib/postgresql/data   # ephemeral: re-seeds on every `db:reset`
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root_test_pw
+      MYSQL_DATABASE: sakila
+      MYSQL_USER: dsm
+      MYSQL_PASSWORD: dsm_test_pw
+    ports:
+      - "53306:3306"
+    volumes:
+      - ./fixtures/mysql:/docker-entrypoint-initdb.d:ro
+    command:
+      - --local-infile=1
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -udsm -pdsm_test_pw -D sakila -e 'SELECT 1 FROM film LIMIT 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    tmpfs:
+      - /var/lib/mysql
+
+  mongo:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dsm
+      MONGO_INITDB_ROOT_PASSWORD: dsm_test_pw
+    ports:
+      - "57017:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u dsm -p dsm_test_pw --eval 'db.adminCommand({ping:1}).ok' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    tmpfs:
+      - /data/db

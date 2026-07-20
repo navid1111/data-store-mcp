@@ -10,7 +10,13 @@
     "dev": "tsc --watch",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "fixtures": "./scripts/fetch-fixtures.sh",
+    "db:up": "./scripts/fetch-fixtures.sh && docker compose up -d --wait --wait-timeout 600",
+    "db:down": "docker compose down -v",
+    "db:reset": "docker compose down -v && npm run db:up",
+    "db:logs": "docker compose logs -f"
   },
   "keywords": [
     "mcp",
@@ -35,7 +41,8 @@
     "@types/mysql": "^2.15.27",
     "@types/node": "^20.10.6",
     "@types/pg": "^8.16.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=18.0.0"
