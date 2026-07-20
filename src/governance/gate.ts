@@ -22,6 +22,8 @@ import { createQueryPlan, type QueryPlan } from './plan.js';
 import { parseError } from './errors.js';
 import { injectRowPolicies } from './rlac.js';
 import type { ResolvedPolicy } from './policy.js';
+import { applyColumnPolicies } from './clac.js';
+import type { SemanticRegistry } from '../semantic/registry.js';
 
 const PARSER_DIALECT: Record<Dialect, string> = {
     postgres: 'postgresql',
@@ -34,6 +36,8 @@ export interface GateOptions extends LimitOptions {
     params?: readonly unknown[];
     /** Host-resolved row policy. Agent/tool input must never construct this. */
     policy?: ResolvedPolicy;
+    /** MDL registry used to expand CLAC-filtered wildcard selections. */
+    semantic?: SemanticRegistry;
 }
 
 /**
@@ -48,6 +52,12 @@ export function buildPlan(sql: string, options: GateOptions): QueryPlan {
     assertReadOnly(parsed);
 
     const [statement] = parsed.statements;
+    const columnPolicy = applyColumnPolicies(
+        statement,
+        options.dialect,
+        options.policy,
+        options.semantic,
+    );
     const rowPolicy = injectRowPolicies(
         statement,
         options.dialect,
@@ -75,11 +85,12 @@ export function buildPlan(sql: string, options: GateOptions): QueryPlan {
         params: rowPolicy.params,
         dialect: options.dialect,
         appliedLimit,
-        appliedPolicies: [
+        appliedPolicies: [...new Set([
             `limit:${appliedLimit}`,
             'read-only',
+            ...columnPolicy.appliedPolicies,
             ...rowPolicy.appliedPolicies,
-        ],
+        ])],
     });
 }
 

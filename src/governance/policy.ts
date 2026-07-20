@@ -43,7 +43,7 @@ const principalSchema = z.object({
     roles: z.array(policyName).min(1),
 }).strict();
 
-const policyDocumentSchema = z.object({
+export const policyDocumentSchema = z.object({
     roles: z.record(policyName, roleSchema),
     principals: z.record(z.string().trim().min(1), principalSchema),
 }).strict();
@@ -87,6 +87,8 @@ export interface ResolvedPolicy {
     rowPredicates: Readonly<Record<string, readonly ResolvedRowPredicate[]>>;
     /** Qualified `model.column` names; `*` means every column is hidden. */
     hiddenColumns: ReadonlySet<string>;
+    /** Qualified column -> policy names responsible for hiding it. */
+    hiddenColumnPolicies: Readonly<Record<string, readonly string[]>>;
     appliedPolicies: readonly string[];
 }
 
@@ -118,6 +120,7 @@ export class PolicyEngine {
             left.localeCompare(right));
         const byModel = new Map<string, ResolvedRowPredicate[]>();
         const hiddenColumns: string[] = [];
+        const hiddenColumnPolicies = new Map<string, Set<string>>();
         const appliedPolicies = new Set<string>();
 
         for (const roleName of roles) {
@@ -138,7 +141,11 @@ export class PolicyEngine {
             for (const rule of role.hiddenColumns) {
                 const qualifiedName = `${roleName}:${rule.name}`;
                 for (const column of rule.columns) {
-                    hiddenColumns.push(`${rule.model}.${column}`);
+                    const hidden = `${rule.model}.${column}`;
+                    hiddenColumns.push(hidden);
+                    const names = hiddenColumnPolicies.get(hidden) ?? new Set<string>();
+                    names.add(qualifiedName);
+                    hiddenColumnPolicies.set(hidden, names);
                 }
                 appliedPolicies.add(qualifiedName);
             }
@@ -158,6 +165,7 @@ export class PolicyEngine {
             roles: Object.freeze(roles),
             rowPredicates,
             hiddenColumns: new FrozenStringSet(hiddenColumns),
+            hiddenColumnPolicies: freezePolicyMap(hiddenColumnPolicies),
             appliedPolicies: Object.freeze([...appliedPolicies].sort()),
         });
     }
@@ -226,8 +234,21 @@ function denyUnknownPrincipal(principal: string): ResolvedPolicy {
         roles: Object.freeze([]),
         rowPredicates: Object.freeze({ '*': Object.freeze([predicate]) }),
         hiddenColumns: new FrozenStringSet(['*']),
+        hiddenColumnPolicies: Object.freeze({
+            '*': Object.freeze(['deny:unknown-principal']),
+        }),
         appliedPolicies: Object.freeze(['deny:unknown-principal']),
     });
+}
+
+function freezePolicyMap(
+    policies: ReadonlyMap<string, ReadonlySet<string>>,
+): Readonly<Record<string, readonly string[]>> {
+    return Object.freeze(Object.fromEntries(
+        [...policies.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([column, names]) => [column, Object.freeze([...names].sort())]),
+    ));
 }
 
 /** ReadonlySet with no runtime mutation methods exposed through a cast. */

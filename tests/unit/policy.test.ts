@@ -25,6 +25,9 @@ describe('principal policy engine', () => {
       }),
     ]);
     expect([...resolved.hiddenColumns]).toEqual(['customer.email']);
+    expect(resolved.hiddenColumnPolicies).toEqual({
+      'customer.email': ['store-one:customer-contact'],
+    });
     expect(resolved.appliedPolicies).toEqual([
       'store-one:customer-contact',
       'store-one:customer-store',

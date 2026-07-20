@@ -23,6 +23,7 @@ import { HashEmbeddingProvider } from '../memory/embedding.js';
 import { loadSkill, listSkillNames } from '../skills/registry.js';
 import { installSkillDiscovery } from '../skills/install.js';
 import { parsePrincipal, runWithPrincipal } from '../auth/principal.js';
+import { PolicyEngine } from '../governance/policy.js';
 
 type OptionValue = string | boolean;
 
@@ -188,6 +189,10 @@ async function runAsk(argv: string[]): Promise<number> {
         if (guidedMode) {
             const config = await loadConfig(optionalString(parsed, 'config'));
             const semantic = await SemanticRegistry.load(config.semanticPath);
+            const principal = parsePrincipal(config.audit.principal, 'CLI configuration');
+            const policy = config.policies
+                ? new PolicyEngine(config.policies).resolve(principal)
+                : undefined;
             const project = await loadProjectContext(optionalString(parsed, 'project') ?? process.cwd());
             memory = config.memoryPath
                 ? await ExecutionMemoryIndex.open(config.memoryPath)
@@ -198,9 +203,7 @@ async function runAsk(argv: string[]): Promise<number> {
                 ...(memory ? {
                     retriever: new HybridMemoryRetriever(memory, new HashEmbeddingProvider()),
                 } : {}),
-                // The policy engine supplies this set once Phase 4 is active.
-                // Keeping it explicit here makes prompt assembly fail-closed.
-                hiddenColumns: new Set<string>(),
+                hiddenColumns: policy?.hiddenColumns ?? new Set<string>(),
             };
         }
         const result = await askQuestion(parsed.positionals[0], {
@@ -326,6 +329,10 @@ async function runQuery(argv: string[]): Promise<number> {
             secrets: credentialSecrets(target.config.sources),
         });
         const principal = parsePrincipal(target.config.audit.principal, 'CLI configuration');
+        const semantic = await SemanticRegistry.load(target.config.semanticPath);
+        const policy = target.config.policies
+            ? new PolicyEngine(target.config.policies).resolve(principal)
+            : undefined;
         const result = await runWithPrincipal(principal, () =>
             executeWithAudit(audit, {
                 source: target.database.config.id,
@@ -333,6 +340,8 @@ async function runQuery(argv: string[]): Promise<number> {
             }, async (context) => {
                 const plan = buildPlan(sql, {
                     dialect: dialectFor(target.database.config.type),
+                    policy,
+                    semantic,
                 });
                 context.sql = plan.sql;
                 context.appliedPolicies.push(...plan.appliedPolicies);

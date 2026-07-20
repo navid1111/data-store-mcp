@@ -90,6 +90,8 @@ export const queryDatabaseTool = {
             const plan = buildPlan(parsed.sql || '', {
                 dialect: dialectFor(db.config.type),
                 params: parsed.params,
+                policy: registry.resolvePolicy(),
+                semantic: registry.getSemanticRegistry(),
             });
             audit.sql = plan.sql;
             audit.appliedPolicies.push(...plan.appliedPolicies);

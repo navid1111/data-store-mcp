@@ -9,6 +9,8 @@ import { PostgresDatabase } from '../postgres.js';
 import type { SemanticRegistry } from '../semantic/registry.js';
 import type { ExecutionMemoryIndex } from '../memory/index.js';
 import type { HybridMemoryRetriever } from '../memory/retrieval.js';
+import { currentPrincipal } from '../auth/principal.js';
+import type { PolicyEngine, ResolvedPolicy } from '../governance/policy.js';
 
 export interface SourceDescriptor {
     name: string;
@@ -24,6 +26,7 @@ export class SourceRegistry {
     private readonly semanticRegistry: SemanticRegistry;
     private readonly memoryIndex?: ExecutionMemoryIndex;
     private readonly memoryRetriever?: HybridMemoryRetriever;
+    private readonly policyEngine?: PolicyEngine;
 
     private constructor(
         sources: Map<string, Database>,
@@ -32,6 +35,7 @@ export class SourceRegistry {
         semanticRegistry: SemanticRegistry,
         memoryIndex?: ExecutionMemoryIndex,
         memoryRetriever?: HybridMemoryRetriever,
+        policyEngine?: PolicyEngine,
     ) {
         this.sources = sources;
         this.executionOptions = Object.freeze({ ...executionOptions });
@@ -39,6 +43,7 @@ export class SourceRegistry {
         this.semanticRegistry = semanticRegistry;
         this.memoryIndex = memoryIndex;
         this.memoryRetriever = memoryRetriever;
+        this.policyEngine = policyEngine;
     }
 
     /** Connect every configured source before publishing the registry. */
@@ -49,6 +54,7 @@ export class SourceRegistry {
         semanticRegistry: SemanticRegistry,
         memoryIndex?: ExecutionMemoryIndex,
         memoryRetriever?: HybridMemoryRetriever,
+        policyEngine?: PolicyEngine,
     ): Promise<SourceRegistry> {
         const sources = new Map<string, Database>();
 
@@ -69,6 +75,7 @@ export class SourceRegistry {
             semanticRegistry,
             memoryIndex,
             memoryRetriever,
+            policyEngine,
         );
         SourceRegistry.instance = registry;
         return registry;
@@ -103,6 +110,11 @@ export class SourceRegistry {
 
     getMemoryRetriever(): HybridMemoryRetriever | undefined {
         return this.memoryRetriever;
+    }
+
+    /** Resolves only the transport-authenticated principal in the active context. */
+    resolvePolicy(): ResolvedPolicy | undefined {
+        return this.policyEngine?.resolve(currentPrincipal());
     }
 
     /**

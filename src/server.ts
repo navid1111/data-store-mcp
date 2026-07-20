@@ -20,6 +20,7 @@ import { HybridMemoryRetriever } from './memory/retrieval.js';
 import { HashEmbeddingProvider } from './memory/embedding.js';
 import { parsePrincipal, type Principal } from './auth/principal.js';
 import { invokeToolHandler } from './mcp/invoke.js';
+import { PolicyEngine } from './governance/policy.js';
 
 /**
  * Create and configure the MCP server
@@ -102,6 +103,7 @@ async function main() {
     semanticRegistry,
     memoryIndex,
     memoryRetriever,
+    config.policies ? new PolicyEngine(config.policies) : undefined,
   );
 
   const server = createServer(principal);

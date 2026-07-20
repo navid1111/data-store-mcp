@@ -60,6 +60,10 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
           topValues:
             - value: ACADEMY DINOSAUR
               count: 1
+      - name: replacement_cost
+        description: Internal replacement cost.
+        provenance: human
+        dataType: numeric
 metrics:
   - name: film_count
     description: Number of films.
@@ -76,6 +80,20 @@ metrics:
         audit: { path: auditPath },
         memory: { path: join(configDir, 'memory') },
         limits: { maxResultBytes: 4 * 1024 * 1024, timeoutMs: 750 },
+        policies: {
+          roles: {
+            analyst: {
+              hiddenColumns: [{
+                name: 'film-internal-cost',
+                model: 'film',
+                columns: ['replacement_cost'],
+              }],
+            },
+          },
+          principals: {
+            'e2e-analyst': { roles: ['analyst'] },
+          },
+        },
         sources: [
           {
             name: 'e2e-pagila',
@@ -201,6 +219,7 @@ metrics:
       const title = res.model.columns.find((column: any) => column.name === 'title');
       expect(title.description).toBe('Film title.');
       expect(title.profile.topValues).toEqual([{ value: 'ACADEMY DINOSAUR', count: 1 }]);
+      expect(res.model.columns.map((column: any) => column.name)).not.toContain('replacement_cost');
     });
 
     it('list_metrics returns documented semantic metrics', async () => {
@@ -533,6 +552,42 @@ metrics:
       expect(JSON.parse(res.content[0].text).error).toEqual(
         expect.objectContaining({ code: 'E_UNKNOWN_COLUMN', didYouMean: ['title'] }),
       );
+    });
+
+    it('removes hidden columns from dry plans and SELECT star results', async () => {
+      const dry = payload(await client.callTool({
+        name: 'dry_plan',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film' },
+      }));
+      expect(dry.sql).not.toContain('replacement_cost');
+      expect(dry.resolvedColumns).not.toContain('film.replacement_cost');
+      expect(dry.appliedPolicies).toContain('analyst:film-internal-cost');
+
+      const queried = payload(await client.callTool({
+        name: 'query',
+        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film LIMIT 1' },
+      }));
+      expect(Object.keys(queried.results[0])).toEqual(['film_id', 'title']);
+    });
+
+    it('denies explicit hidden columns without leaking them in errors or suggestions', async () => {
+      for (const sql of [
+        'SELECT replacement_cost FROM film',
+        'SELECT replacment_cost FROM film',
+      ]) {
+        const result: any = await client.callTool({
+          name: 'dry_plan',
+          arguments: { connectionId: 'e2e-pagila', sql },
+        });
+        expect(result.isError).toBe(true);
+        const text = result.content[0].text;
+        if (sql.includes('replacement_cost')) {
+          expect(JSON.parse(text).error).toEqual(expect.objectContaining({
+            code: 'E_POLICY_DENIED',
+          }));
+        }
+        expect(text).not.toContain('replacement_cost');
+      }
     });
   });
 });

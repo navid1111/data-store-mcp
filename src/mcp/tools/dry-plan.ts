@@ -4,6 +4,7 @@ import { buildPlan, dialectFor } from '../../governance/gate.js';
 import { unknownColumn, unverifiedModel } from '../../governance/errors.js';
 import { resolveColumn, resolveModel, suggestNames } from '../../semantic/resolve.js';
 import { SourceRegistry } from '../../sources/registry.js';
+import { hiddenColumnNames } from '../../governance/clac.js';
 
 const { Parser } = sqlParser;
 
@@ -28,8 +29,9 @@ export const dryPlanTool = {
         }
 
         const dialect = dialectFor(source.config.type);
-        const plan = buildPlan(parsed.sql, { dialect });
         const registry = runtime.getSemanticRegistry();
+        const policy = runtime.resolvePolicy();
+        const plan = buildPlan(parsed.sql, { dialect, policy, semantic: registry });
         const parser = new Parser();
         const database = dialect === 'postgres' ? 'postgresql' : 'mysql';
         const tableNames = parser.tableList(parsed.sql, { database })
@@ -46,7 +48,12 @@ export const dryPlanTool = {
                 : models;
             const matches = candidates.flatMap((model) => {
                 try {
-                    return [{ model, column: resolveColumn(model, reference.name) }];
+                    return [{
+                        model,
+                        column: resolveColumn(model, reference.name, {
+                            hidden: hiddenColumnNames(model, policy),
+                        }),
+                    }];
                 } catch {
                     return [];
                 }
@@ -54,7 +61,9 @@ export const dryPlanTool = {
             if (matches.length !== 1) {
                 throw unknownColumn(reference.name, suggestNames(
                     reference.name,
-                    candidates.flatMap((model) => model.columns.map((column) => column.name)),
+                    candidates.flatMap((model) => model.columns
+                        .filter((column) => !hiddenColumnNames(model, policy).has(column.name))
+                        .map((column) => column.name)),
                 ));
             }
             resolvedColumns.push(`${matches[0].model.name}.${matches[0].column.name}`);
