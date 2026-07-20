@@ -140,7 +140,7 @@ loudly with hints.
 | 2.8 | `mdl bootstrap`: introspect + profile → draft YAML, all `verified: false` | R3.7, §5.4 | 0.6, 0.7, 2.2 **done** |
 | 2.9 | LLM drafting of descriptions/metrics inside bootstrap | R3.7, §5.3 | 2.8 **done** |
 | 2.10 | Artifact mining: `pg_stat_statements` / slow log → join patterns, filters, aggregates | R3.10, §5.3 | 2.8 **done** |
-| 2.11 | Relationship inference where FKs are undeclared (name → type → value overlap) | R3.9, B11 | 0.7, 2.8 |
+| 2.11 | Relationship inference where FKs are undeclared (name → type → value overlap) | R3.9, B11 | 0.7, 2.8 **done** |
 | 2.12 | `mdl lint` — drift between MDL and live DB | R3.5 | 2.2 |
 | 2.13 | `instructions.md` + `queries.yml` loading | R4.1, R4.2 | 2.2 |
 | 2.14 | Description coverage rule: undescribed model = lint error | R3.3 | 2.12 |
