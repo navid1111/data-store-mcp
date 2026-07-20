@@ -161,7 +161,7 @@ if it turns into a project of its own.
 
 | ID | Task | Spec | Depends |
 |---|---|---|---|
-| 3.1 | Golden eval runner over `queries.yml`; pass-rate report | R7.1 | 2.13 |
+| 3.1 | Golden eval runner over `queries.yml`; pass-rate report | R7.1 | 2.13 **done** |
 | 3.2 | Eval in CI on every MDL change | R7.3 | 3.1 |
 | 3.3 | LanceDB index of successful executions | R5.1 | 1.11 |
 | 3.4 | Hybrid retrieval: BM25 + vector, reciprocal rank fusion | R5.2 | 3.3 |

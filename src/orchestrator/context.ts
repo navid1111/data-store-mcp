@@ -8,6 +8,8 @@ import { z, type ZodIssue } from 'zod';
 export interface ApprovedQuery {
     question: string;
     sql: string;
+    /** Recorded golden result. Optional for context-only approved examples. */
+    expected?: Array<Record<string, unknown>>;
 }
 
 export interface ProjectContext {
@@ -34,6 +36,7 @@ const queriesSchema = z.object({
     queries: z.array(z.object({
         question: nonEmpty,
         sql: nonEmpty,
+        expected: z.array(z.record(z.unknown())).optional(),
     }).strict()).default([]),
 }).strict();
 
