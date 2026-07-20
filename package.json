@@ -5,6 +5,10 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "data-store-mcp": "./dist/cli/index.js",
+    "dsm": "./dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
