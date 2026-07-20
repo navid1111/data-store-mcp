@@ -41,7 +41,7 @@ const sourceSchema = z.discriminatedUnion('type', [
 ]);
 
 const configSchema = z.object({
-    principal: z.string().min(1),
+    principal: z.string().trim().min(1),
     semantic: z.object({
         path: z.string().min(1),
     }).strict(),

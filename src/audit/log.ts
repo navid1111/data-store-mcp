@@ -3,6 +3,7 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { redactSecrets } from '../mcp/errors.js';
+import { parsePrincipal } from '../auth/principal.js';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied' | 'timeout';
 
@@ -23,7 +24,10 @@ export interface AuditRecord extends AuditRecordInput {
 
 export interface AuditLogOptions {
     path: string;
-    principal: string;
+    /** Fixed identity for stdio/CLI deployments. */
+    principal?: string;
+    /** Request-scoped identity for host applications such as HTTP. */
+    principalProvider?: () => string;
     /** Exact credential values that must never be persisted. */
     secrets?: readonly string[];
 }
@@ -35,13 +39,13 @@ export interface AuditLogOptions {
  */
 export class AuditLog {
     readonly path: string;
-    private readonly principal: string;
+    private readonly principalProvider: () => string;
     private readonly secrets: readonly string[];
     private tail: Promise<void> = Promise.resolve();
 
     private constructor(options: AuditLogOptions) {
         this.path = resolve(options.path);
-        this.principal = options.principal;
+        this.principalProvider = options.principalProvider ?? (() => options.principal!);
         this.secrets = Object.freeze(
             [...new Set(options.secrets ?? [])]
                 .filter((secret) => secret.length > 0)
@@ -51,9 +55,12 @@ export class AuditLog {
 
     /** Ensures the append target is writable without adding an audit record. */
     static async open(options: AuditLogOptions): Promise<AuditLog> {
-        if (!options.principal.trim()) {
-            throw new Error('Audit principal must not be empty.');
+        const hasFixed = options.principal !== undefined;
+        const hasProvider = options.principalProvider !== undefined;
+        if (hasFixed === hasProvider) {
+            throw new Error('Audit log requires exactly one principal or principalProvider.');
         }
+        if (hasFixed) parsePrincipal(options.principal, 'Audit configuration');
         if (!options.path.trim()) {
             throw new Error('Audit path must not be empty.');
         }
@@ -67,7 +74,7 @@ export class AuditLog {
     append(input: AuditRecordInput): Promise<void> {
         const record: AuditRecord = {
             timestamp: new Date().toISOString(),
-            principal: this.clean(this.principal),
+            principal: this.clean(requiredPrincipal(this.principalProvider())),
             source: this.clean(input.source),
             sql: this.clean(input.sql),
             appliedPolicies: input.appliedPolicies.map((policy) => this.clean(policy)),
@@ -94,4 +101,8 @@ export class AuditLog {
         }
         return cleaned;
     }
+}
+
+function requiredPrincipal(value: string): string {
+    return parsePrincipal(value, 'Audit principal provider');
 }

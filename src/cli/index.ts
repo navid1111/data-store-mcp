@@ -22,6 +22,7 @@ import { HybridMemoryRetriever } from '../memory/retrieval.js';
 import { HashEmbeddingProvider } from '../memory/embedding.js';
 import { loadSkill, listSkillNames } from '../skills/registry.js';
 import { installSkillDiscovery } from '../skills/install.js';
+import { parsePrincipal, runWithPrincipal } from '../auth/principal.js';
 
 type OptionValue = string | boolean;
 
@@ -324,26 +325,28 @@ async function runQuery(argv: string[]): Promise<number> {
             ...target.config.audit,
             secrets: credentialSecrets(target.config.sources),
         });
-        const result = await executeWithAudit(audit, {
-            source: target.database.config.id,
-            sql,
-        }, async (context) => {
-            const plan = buildPlan(sql, {
-                dialect: dialectFor(target.database.config.type),
-            });
-            context.sql = plan.sql;
-            context.appliedPolicies.push(...plan.appliedPolicies);
-            const rows = await target.database.execute(plan, target.config.execution);
-            return {
-                value: {
-                    source: target.database.config.id,
-                    appliedLimit: plan.appliedLimit,
-                    appliedPolicies: plan.appliedPolicies,
-                    rows,
-                },
-                rowCount: Array.isArray(rows) ? rows.length : rows == null ? 0 : 1,
-            };
-        });
+        const principal = parsePrincipal(target.config.audit.principal, 'CLI configuration');
+        const result = await runWithPrincipal(principal, () =>
+            executeWithAudit(audit, {
+                source: target.database.config.id,
+                sql,
+            }, async (context) => {
+                const plan = buildPlan(sql, {
+                    dialect: dialectFor(target.database.config.type),
+                });
+                context.sql = plan.sql;
+                context.appliedPolicies.push(...plan.appliedPolicies);
+                const rows = await target.database.execute(plan, target.config.execution);
+                return {
+                    value: {
+                        source: target.database.config.id,
+                        appliedLimit: plan.appliedLimit,
+                        appliedPolicies: plan.appliedPolicies,
+                        rows,
+                    },
+                    rowCount: Array.isArray(rows) ? rows.length : rows == null ? 0 : 1,
+                };
+            }));
         writeData(result, parsed);
         return 0;
     } finally {

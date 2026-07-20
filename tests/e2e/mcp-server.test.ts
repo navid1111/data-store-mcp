@@ -71,7 +71,7 @@ metrics:
     writeFileSync(
       configPath,
       JSON.stringify({
-        principal: 'e2e-analyst',
+        principal: '${E2E_PRINCIPAL}',
         semantic: { path: configDir },
         audit: { path: auditPath },
         memory: { path: join(configDir, 'memory') },
@@ -110,7 +110,11 @@ metrics:
       new StdioClientTransport({
         command: 'node',
         args: ['dist/server.js'],
-        env: { ...inheritedEnv, DATA_STORE_MCP_CONFIG: configPath },
+        env: {
+          ...inheritedEnv,
+          DATA_STORE_MCP_CONFIG: configPath,
+          E2E_PRINCIPAL: 'e2e-analyst',
+        },
       }),
     );
   }, 60_000);
@@ -449,7 +453,11 @@ metrics:
 
       await client.callTool({
         name: 'query',
-        arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 42 AS answer' },
+        arguments: {
+          connectionId: 'e2e-pagila',
+          sql: 'SELECT 42 AS answer',
+          principal: 'admin',
+        },
       });
       await client.callTool({
         name: 'query',

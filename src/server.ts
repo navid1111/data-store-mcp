@@ -18,11 +18,13 @@ import { SemanticRegistry } from './semantic/registry.js';
 import { ExecutionMemoryIndex } from './memory/index.js';
 import { HybridMemoryRetriever } from './memory/retrieval.js';
 import { HashEmbeddingProvider } from './memory/embedding.js';
+import { parsePrincipal, type Principal } from './auth/principal.js';
+import { invokeToolHandler } from './mcp/invoke.js';
 
 /**
  * Create and configure the MCP server
  */
-function createServer(): Server {
+export function createServer(principal: Principal): Server {
   const server = new Server(
     {
       name: 'data-store-mcp',
@@ -58,7 +60,7 @@ function createServer(): Server {
     }
 
     try {
-      const result = await tool.handler(args || {});
+      const result = await invokeToolHandler(tool.handler, args || {}, principal);
       return {
         content: [
           {
@@ -81,6 +83,7 @@ function createServer(): Server {
  */
 async function main() {
   const config = await loadConfig();
+  const principal = parsePrincipal(config.audit.principal, 'stdio startup configuration');
   const auditLog = await AuditLog.open({
     ...config.audit,
     secrets: credentialSecrets(config.sources),
@@ -101,7 +104,7 @@ async function main() {
     memoryRetriever,
   );
 
-  const server = createServer();
+  const server = createServer(principal);
   const transport = new StdioServerTransport();
   
   await server.connect(transport);
