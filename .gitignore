@@ -21,3 +21,6 @@ coverage/
 # Markdown Reports
 *.md
 !README.md
+# Added by code-review-graph
+.code-review-graph/
+graphify-out/
