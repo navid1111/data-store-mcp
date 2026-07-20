@@ -4,13 +4,14 @@ import { readFile } from 'node:fs/promises';
 import { LineCounter, parseDocument } from 'yaml';
 import type { ColumnInfo, Database, TableRelation } from '../database-source.js';
 import { parseMdlYaml } from './schema.js';
-import type { Model, Relationship } from './types.js';
+import type { MdlDocument, Model, Relationship } from './types.js';
 
 export type DriftFindingCode =
     | 'missing_model_table'
     | 'missing_column'
     | 'column_type_changed'
-    | 'missing_foreign_key';
+    | 'missing_foreign_key'
+    | 'missing_description';
 
 export interface DriftFinding {
     code: DriftFindingCode;
@@ -32,6 +33,15 @@ interface Location {
     column: number;
 }
 
+export interface DescriptionCoverageFinding {
+    entityPath: string;
+    message: string;
+}
+
+interface DescriptionIssue extends DescriptionCoverageFinding {
+    yamlPath: Array<string | number>;
+}
+
 /** Parses and checks one MDL artifact against the connected source. */
 export async function lintMdlFile(database: Database, file: string): Promise<MdlLintResult> {
     const source = await readFile(file, 'utf8');
@@ -43,7 +53,13 @@ export async function lintMdlFile(database: Database, file: string): Promise<Mdl
     const liveColumns = groupColumns(await database.getSchema());
     const liveRelations = await database.getRelations();
     const models = new Map(document.models.map((model) => [model.name, model]));
-    const findings: DriftFinding[] = [];
+    const findings: DriftFinding[] = descriptionIssues(document).map((issue) => finding(
+        'missing_description',
+        file,
+        locations(issue.yamlPath),
+        issue.entityPath,
+        issue.message,
+    ));
 
     document.models.forEach((model, modelIndex) => {
         if (!liveTables.has(model.table)) {
@@ -100,6 +116,41 @@ export async function lintMdlFile(database: Database, file: string): Promise<Mdl
     });
 
     return { findings, exitCode: findings.length === 0 ? 0 : 1 };
+}
+
+/** Pure coverage rule for callers that do not need live-schema checks. */
+export function lintDescriptionCoverage(document: MdlDocument): DescriptionCoverageFinding[] {
+    return descriptionIssues(document).map(({ entityPath, message }) => ({ entityPath, message }));
+}
+
+function descriptionIssues(document: MdlDocument): DescriptionIssue[] {
+    const issues: DescriptionIssue[] = [];
+    document.models.forEach((model, modelIndex) => {
+        if (!model.description?.trim()) {
+            issues.push({
+                entityPath: `model.${model.name}`,
+                message: `Model "${model.name}" is missing a description.`,
+                yamlPath: ['models', modelIndex, 'description'],
+            });
+        }
+        model.columns.forEach((column, columnIndex) => {
+            if (column.description?.trim()) return;
+            issues.push({
+                entityPath: `model.${model.name}.column.${column.name}`,
+                message: `Column "${model.name}.${column.name}" is missing a description.`,
+                yamlPath: ['models', modelIndex, 'columns', columnIndex, 'description'],
+            });
+        });
+    });
+    document.metrics.forEach((metric, metricIndex) => {
+        if (metric.description?.trim()) return;
+        issues.push({
+            entityPath: `metric.${metric.name}`,
+            message: `Metric "${metric.name}" is missing a description.`,
+            yamlPath: ['metrics', metricIndex, 'description'],
+        });
+    });
+    return issues;
 }
 
 function relationshipHasForeignKey(
@@ -176,7 +227,13 @@ function locationResolver(source: string): (path: Array<string | number>) => Loc
     const lineCounter = new LineCounter();
     const document = parseDocument(source, { lineCounter, strict: true, uniqueKeys: true });
     return (path) => {
-        const node = document.getIn(path, true) as { range?: readonly number[] } | null | undefined;
+        let node: { range?: readonly number[] } | null | undefined;
+        for (let length = path.length; length > 0 && !node; length -= 1) {
+            node = document.getIn(path.slice(0, length), true) as
+                | { range?: readonly number[] }
+                | null
+                | undefined;
+        }
         const offset = node?.range?.[0] ?? 0;
         const position = lineCounter.linePos(offset);
         return { line: position.line, column: position.col };

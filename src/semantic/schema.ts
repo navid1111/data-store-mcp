@@ -15,7 +15,9 @@ const entityFields = {
     name: nonEmpty,
     // Description coverage is a lint rule (task 2.14), not a parse rule. An
     // empty draft must remain reviewable instead of crashing bootstrap.
-    description: z.string(),
+    // Coverage is enforced by the linter so a missing description remains
+    // parseable and receives an entity-specific diagnostic (task 2.14).
+    description: z.string().default(''),
     provenance: provenanceSchema,
     // Unreviewed is the safe default. Only a human edit may opt into true.
     verified: z.boolean().default(false),
