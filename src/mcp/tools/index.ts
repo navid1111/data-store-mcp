@@ -3,11 +3,12 @@
  * Tool registry - Central export for all MCP tools
  */
 
-import { echoTool } from './echo.js';
 import { queryDatabaseTool } from './query.js';
-import { inspectDatabaseTool } from './inspector.js';
 import { listSourcesTool } from './list-sources.js';
 import { dryPlanTool } from './dry-plan.js';
+import { describeModelTool } from './describe-model.js';
+import { listMetricsTool } from './list-metrics.js';
+import { searchContextTool } from './search-context.js';
 
 export interface Tool {
   name: string;
@@ -21,9 +22,10 @@ export interface Tool {
 }
 
 export const tools: Record<string, Tool> = {
-  [echoTool.name]: echoTool,
   [listSourcesTool.name]: listSourcesTool,
+  [describeModelTool.name]: describeModelTool,
   [dryPlanTool.name]: dryPlanTool,
+  [listMetricsTool.name]: listMetricsTool,
   [queryDatabaseTool.name]: queryDatabaseTool,
-  [inspectDatabaseTool.name]: inspectDatabaseTool,
+  [searchContextTool.name]: searchContextTool,
 };

@@ -34,8 +34,8 @@ src/server.ts]
     B --> C[Tool Registry
 src/mcp/tools/index.ts]
     C --> D[list_sources]
-    C --> E[inspect_database]
-    C --> F[query_database]
+    C --> E[describe_model]
+    C --> F[query]
     D --> G[Source Registry]
     E --> G
     F --> G
@@ -55,11 +55,11 @@ sequenceDiagram
     participant DB as Database
 
     U->>C: "Check customer churn by plan"
-    C->>S: inspect_database(connectionId)
+    C->>S: describe_model(connectionId)
     S->>DB: inspect schema
     DB-->>S: tables, columns, relations
     S-->>C: schema summary
-    C->>S: query_database(connectionId, query)
+    C->>S: query(connectionId, query)
     S->>DB: run query
     DB-->>S: rows
     S-->>C: machine-readable result
@@ -75,7 +75,7 @@ Used for:
 - selecting a source for later inspect/query calls
 - keeping credentials outside the model context
 
-### `inspect_database`
+### `describe_model`
 Lets an assistant inspect tables, collections, columns, and relationships before it generates a query.
 
 Used for:
@@ -83,7 +83,7 @@ Used for:
 - mapping unknown databases quickly
 - grounding downstream analysis tasks
 
-### `query_database`
+### `query`
 Executes SQL queries or structured MongoDB query payloads.
 
 Used for:

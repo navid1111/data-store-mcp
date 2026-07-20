@@ -6,7 +6,7 @@ import { SourceRegistry } from '../../sources/registry.js';
 import { executeWithAudit } from '../../audit/execution.js';
 
 export const queryDatabaseTool = {
-    name: 'query_database',
+    name: 'query',
     description: 'Inspect structure, then execute a SQL query or read-only MongoDB query on a connected database',
     inputSchema: {
         type: 'object',

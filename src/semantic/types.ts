@@ -10,6 +10,7 @@ export const PROVENANCE_VALUES = [
 ] as const;
 
 export type Provenance = typeof PROVENANCE_VALUES[number];
+export type SemanticScalar = string | number | boolean | null;
 
 export interface MdlEntity {
     name: string;
@@ -24,6 +25,13 @@ export interface Column extends MdlEntity {
     nullable?: boolean;
     isPrimaryKey?: boolean;
     isUnique?: boolean;
+    profile?: {
+        distinctCount: number;
+        nullRate: number;
+        min?: SemanticScalar;
+        max?: SemanticScalar;
+        topValues?: Array<{ value: SemanticScalar; count: number }>;
+    };
 }
 
 export interface Model extends MdlEntity {

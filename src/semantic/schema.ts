@@ -9,6 +9,7 @@ import {
 
 const nonEmpty = z.string().trim().min(1);
 const provenanceSchema = z.enum(PROVENANCE_VALUES);
+const semanticScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 const entityFields = {
     name: nonEmpty,
@@ -25,6 +26,16 @@ export const columnSchema = z.object({
     nullable: z.boolean().optional(),
     isPrimaryKey: z.boolean().optional(),
     isUnique: z.boolean().optional(),
+    profile: z.object({
+        distinctCount: z.number().int().nonnegative(),
+        nullRate: z.number().min(0).max(1),
+        min: semanticScalar.optional(),
+        max: semanticScalar.optional(),
+        topValues: z.array(z.object({
+            value: semanticScalar,
+            count: z.number().int().nonnegative(),
+        }).strict()).optional(),
+    }).strict().optional(),
 }).strict();
 
 export const modelSchema = z.object({

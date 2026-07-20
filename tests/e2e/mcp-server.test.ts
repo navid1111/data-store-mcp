@@ -54,6 +54,19 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
         description: Film title.
         provenance: db_comment
         dataType: text
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+          topValues:
+            - value: ACADEMY DINOSAUR
+              count: 1
+metrics:
+  - name: film_count
+    description: Number of films.
+    provenance: human
+    verified: true
+    model: film
+    expression: COUNT(film_id)
 `);
     writeFileSync(
       configPath,
@@ -111,13 +124,16 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
       expect(names).toEqual([
+        'describe_model',
         'dry_plan',
-        'echo',
-        'inspect_database',
+        'list_metrics',
         'list_sources',
-        'query_database',
+        'query',
+        'search_context',
       ]);
       expect(names).not.toContain('connect_database');
+      expect(names).not.toContain('inspect_database');
+      expect(names).not.toContain('query_database');
       expect(JSON.stringify(tools.map((tool) => tool.inputSchema))).not.toMatch(/password/i);
     });
 
@@ -138,7 +154,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       const listed = await client.listTools();
       const sources = await client.callTool({ name: 'list_sources', arguments: {} });
       const queried = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS ok' },
       });
       const transcript = JSON.stringify({ listed, sources, queried });
@@ -157,10 +173,10 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
   describe('postgres / pagila', () => {
     const id = 'e2e-pagila';
 
-    it('query_database uses the startup-configured source', async () => {
+    it('query uses the startup-configured source', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: id, sql: 'SELECT count(*)::int AS n FROM film' },
         })
       );
@@ -168,40 +184,37 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(res.results[0].n).toBe(EXPECTED.film);
     });
 
-    it('inspect_database nests columns under a named table', async () => {
+    it('describe_model returns descriptions and profiled top values', async () => {
       const res = payload(
         await client.callTool({
-          name: 'inspect_database',
-          arguments: { connectionId: id, name: 'film' },
+          name: 'describe_model',
+          arguments: { name: 'film' },
         })
       );
-      expect(res.tables).toHaveLength(1);
-      expect(res.tables[0].name).toBe('film');
-      expect(res.tables[0].columns.map((c: any) => c.name)).toContain('title');
-      expect(res.relations.length).toBeGreaterThan(10);
+      expect(res.model.name).toBe('film');
+      expect(res.model.description).toBe('Film catalog.');
+      const title = res.model.columns.find((column: any) => column.name === 'title');
+      expect(title.description).toBe('Film title.');
+      expect(title.profile.topValues).toEqual([{ value: 'ACADEMY DINOSAUR', count: 1 }]);
     });
 
-    // T0.5 — previously returned a flat, unattributable column list (B7).
-    it('inspect_database attributes every column when no table is named', async () => {
+    it('list_metrics returns documented semantic metrics', async () => {
       const res = payload(
-        await client.callTool({ name: 'inspect_database', arguments: { connectionId: id } })
+        await client.callTool({ name: 'list_metrics', arguments: {} })
       );
-      expect(res.tables.length).toBeGreaterThan(5);
-      for (const table of res.tables) {
-        expect(typeof table.name).toBe('string');
-        expect(Array.isArray(table.columns)).toBe(true);
-        expect(table.columns.every((c: any) => c.table === table.name)).toBe(true);
-      }
+      expect(res.metrics).toEqual([
+        expect.objectContaining({ name: 'film_count', description: 'Number of films.' }),
+      ]);
     });
   });
 
   describe('mysql / sakila', () => {
     const id = 'e2e-sakila';
 
-    it('query_database uses the startup-configured source', async () => {
+    it('query uses the startup-configured source', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: id, sql: 'SELECT count(*) AS n FROM film' },
         })
       );
@@ -209,18 +222,6 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       expect(Number(res.results[0].n)).toBe(EXPECTED.film);
     });
 
-    it('inspect_database returns the same shape as Postgres', async () => {
-      const res = payload(
-        await client.callTool({
-          name: 'inspect_database',
-          arguments: { connectionId: id, name: 'film' },
-        })
-      );
-      expect(res.tables).toHaveLength(1);
-      expect(res.tables[0].columns.map((c: any) => c.name)).toContain('title');
-      expect(res.tables[0].columns[0]).not.toHaveProperty('Field');
-      expect(res.relations.length).toBeGreaterThan(10);
-    });
   });
 
   describe('mongodb / seeded fixture', () => {
@@ -229,7 +230,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     it('routes an unbounded find through the Mongo gate', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: {
             connectionId: id,
             query: { operation: 'find', collection: 'film' },
@@ -244,7 +245,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('refuses a writing aggregate stage through the real tool', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: {
           connectionId: id,
           query: {
@@ -264,7 +265,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     // T0.11 criterion 1 — resolves with isError, does not reject.
     it('returns isError for an unknown connectionId', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'nope', sql: 'SELECT 1' },
       });
       expect(res.isError).toBe(true);
@@ -276,7 +277,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     // T0.11 criterion 2.
     it('returns isError for a SQL source called with no sql', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila' },
       });
       expect(res.isError).toBe(true);
@@ -285,7 +286,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('returns structured field issues for invalid arguments', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 42 },
       });
       expect(res.isError).toBe(true);
@@ -297,7 +298,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     // T0.11 criterion 3 — a driver failure must not kill the server.
     it('survives a driver-level failure and stays usable', async () => {
       const bad: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM no_such_table_xyz' },
       });
       expect(bad.isError).toBe(true);
@@ -306,7 +307,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       // Same client, same connection: the server is still alive and working.
       const good = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS ok' },
         })
       );
@@ -315,7 +316,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('does not leak the error message as a generic string', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'nope', sql: 'SELECT 1' },
       });
       // "Tool execution failed" alone gives the agent nothing to act on.
@@ -334,7 +335,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     it('caps an unbounded SELECT at the configured limit', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film' },
         })
       );
@@ -346,7 +347,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     it('preserves a caller limit smaller than the default', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM film LIMIT 3' },
         })
       );
@@ -356,7 +357,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('returns an error when one row exceeds the configured byte cap', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: {
           connectionId: 'e2e-pagila',
           sql: `SELECT repeat('x', 5000000) AS payload`,
@@ -379,7 +380,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       ['TRUNCATE TABLE film'],
     ])('refuses %s', async (sql) => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql },
       });
       expect(res.isError).toBe(true);
@@ -387,7 +388,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('refuses a data-modifying CTE that parses as a SELECT', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: {
           connectionId: 'e2e-pagila',
           sql: 'WITH x AS (DELETE FROM film RETURNING *) SELECT * FROM x',
@@ -398,7 +399,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
 
     it('refuses a multi-statement payload', async () => {
       const res: any = await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 1 AS n; DROP TABLE film' },
       });
       expect(res.isError).toBe(true);
@@ -407,7 +408,7 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
     it('leaves the fixture intact after every refusal', async () => {
       const res = payload(
         await client.callTool({
-          name: 'query_database',
+          name: 'query',
           arguments: { connectionId: 'e2e-pagila', sql: 'SELECT count(*)::int AS n FROM film' },
         })
       );
@@ -419,19 +420,19 @@ describe('MCP server (stdio) / Pagila + Sakila', () => {
       const beforeRecords = auditRecords(auditPath);
 
       await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT 42 AS answer' },
       });
       await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'DELETE FROM film' },
       });
       await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT * FROM audit_missing_table' },
       });
       await client.callTool({
-        name: 'query_database',
+        name: 'query',
         arguments: { connectionId: 'e2e-pagila', sql: 'SELECT pg_sleep(5)' },
       });
 
