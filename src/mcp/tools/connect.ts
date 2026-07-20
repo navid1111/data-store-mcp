@@ -4,7 +4,7 @@ import { ConnectionManager } from '../../connection-utils.js';
 import { PostgresDatabase } from '../../postgres.js';
 import { MysqlDatabase } from '../../mysql.js';
 import { MongoDatabase } from '../../mongodb.js';
-import { ConnectionConfig } from '../../database-source.js';
+import { Database } from '../../database-source.js';
 
 export const connectDatabaseTool = {
     name: 'connect_database',
@@ -31,65 +31,29 @@ export const connectDatabaseTool = {
         required: ['type', 'database'],
     },
     handler: async (args: unknown) => {
-        const schema = z.object({
-            type: z.enum(['mysql', 'postgres', 'mongodb']),
-            uri: z.string().optional(),
-            host: z.string().optional(),
-            port: z.number().optional(),
-            user: z.string().optional(),
-            password: z.string().optional(),
-            database: z.string(),
-            id: z.string().optional(),
-        }).superRefine((value, ctx) => {
-            if (value.type === 'mongodb') {
-                if (!value.uri) {
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        path: ['uri'],
-                        message: 'MongoDB connections require uri',
-                    });
-                }
-                return;
-            }
-
-            for (const field of ['host', 'port', 'user', 'password'] as const) {
-                if (value[field] === undefined) {
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        path: [field],
-                        message: `${value.type} connections require ${field}`,
-                    });
-                }
-            }
-        });
-
-        const parsed = schema.parse(args);
+        const parsed = connectSchema.parse(args);
         const id = parsed.id || `${parsed.type}-${Date.now()}`;
 
-        const config: ConnectionConfig = {
-            id,
-            type: parsed.type as any,
-            options: parsed.type === 'mongodb'
-                ? {
-                    uri: parsed.uri,
-                    database: parsed.database,
-                }
-                : {
-                    host: parsed.host,
-                    port: parsed.port,
-                    user: parsed.user,
-                    password: parsed.password,
-                    database: parsed.database,
-                },
-        };
-
-        let db;
-        if (parsed.type === 'postgres') {
-            db = new PostgresDatabase(config);
-        } else if (parsed.type === 'mongodb') {
-            db = new MongoDatabase(config);
+        // Each branch constructs its own config type, so `options` is checked
+        // against the right shape and no cast is needed.
+        let db: Database;
+        if (parsed.type === 'mongodb') {
+            db = new MongoDatabase({
+                id,
+                type: 'mongodb',
+                options: { uri: parsed.uri, database: parsed.database },
+            });
         } else {
-            db = new MysqlDatabase(config);
+            const options = {
+                host: parsed.host,
+                port: parsed.port,
+                user: parsed.user,
+                password: parsed.password,
+                database: parsed.database,
+            };
+            db = parsed.type === 'postgres'
+                ? new PostgresDatabase({ id, type: 'postgres', options })
+                : new MysqlDatabase({ id, type: 'mysql', options });
         }
 
         await db.connect();
@@ -101,3 +65,28 @@ export const connectDatabaseTool = {
         };
     },
 };
+
+/**
+ * A discriminated union rather than one optional-field object with a
+ * `superRefine`: it makes the parsed result narrow by `type`, which is what
+ * lets the handler build each config without casting.
+ */
+const sqlFields = {
+    host: z.string({ required_error: 'SQL connections require host' }),
+    port: z.number({ required_error: 'SQL connections require port' }),
+    user: z.string({ required_error: 'SQL connections require user' }),
+    password: z.string({ required_error: 'SQL connections require password' }),
+    database: z.string(),
+    id: z.string().optional(),
+};
+
+const connectSchema = z.discriminatedUnion('type', [
+    z.object({ type: z.literal('postgres'), ...sqlFields }),
+    z.object({ type: z.literal('mysql'), ...sqlFields }),
+    z.object({
+        type: z.literal('mongodb'),
+        uri: z.string({ required_error: 'MongoDB connections require uri' }),
+        database: z.string(),
+        id: z.string().optional(),
+    }),
+]);

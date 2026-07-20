@@ -40,9 +40,9 @@ app.post('/connect', async (_req, res) => {
         const result = await client.query('SELECT NOW()');
         client.release();
         res.json({ success: true, time: result.rows[0].now });
-    } catch (err: any) {
+    } catch (err) {
         console.error('Connection failed:', err);
-        res.status(500).json({ success: false, error: err.message });
+        res.status(500).json({ success: false, error: (err as Error).message });
     }
 });
 
@@ -55,9 +55,9 @@ app.post('/query', async (req, res) => {
     try {
         const result = await pool.query(sql, params || []);
         return res.json({ rows: result.rows, rowCount: result.rowCount });
-    } catch (err: any) {
+    } catch (err) {
         console.error('Query failed:', err);
-        return res.status(500).json({ error: err.message });
+        return res.status(500).json({ error: (err as Error).message });
     }
 });
 

@@ -1,12 +1,12 @@
 
-import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
+import { Database, MysqlConnectionConfig, Row, TableRelation } from "./database-source.js";
 import { quoteMysqlIdentifier } from "./identifiers.js";
 import mysql from 'mysql2/promise';
 
-export class MysqlDatabase extends Database {
+export class MysqlDatabase extends Database<MysqlConnectionConfig> {
   private connection: mysql.Connection | null = null;
 
-  constructor(config: ConnectionConfig) {
+  constructor(config: MysqlConnectionConfig) {
     super(config);
   }
 
@@ -14,15 +14,15 @@ export class MysqlDatabase extends Database {
     this.connection = await mysql.createConnection(this.config.options);
   }
 
-  async query(sql: string, params?: any): Promise<any> {
+  async query(sql: string, params?: unknown[]): Promise<Row[]> {
     if (!this.connection) {
       throw new Error("Database not connected");
     }
     const [rows] = await this.connection.execute(sql, params);
-    return rows;
+    return rows as Row[];
   }
 
-  async getSchema(tableName?: string): Promise<any> {
+  async getSchema(tableName?: string): Promise<Row[]> {
     if (!this.connection) {
       throw new Error("Database not connected");
     }

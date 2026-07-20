@@ -1,5 +1,10 @@
 import { MongoClient, Db, Document, Filter } from "mongodb";
-import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
+import {
+    Database,
+    MongoConnectionConfig,
+    QueryParams,
+    TableRelation,
+} from "./database-source.js";
 
 type MongoOperation = "find" | "findOne" | "aggregate" | "countDocuments" | "distinct";
 
@@ -15,11 +20,19 @@ interface MongoQueryPayload {
     field?: string;
 }
 
-export class MongoDatabase extends Database {
+/** Collection summary returned by {@link MongoDatabase.getSchema}. */
+export interface CollectionInfo {
+    name: string;
+    estimatedDocumentCount: number;
+    sampleFields: string[];
+    indexes: Array<{ name?: string; key: Document; unique: boolean }>;
+}
+
+export class MongoDatabase extends Database<MongoConnectionConfig> {
     private client: MongoClient | null = null;
     private db: Db | null = null;
 
-    constructor(config: ConnectionConfig) {
+    constructor(config: MongoConnectionConfig) {
         super(config);
     }
 
@@ -37,7 +50,7 @@ export class MongoDatabase extends Database {
         await this.db.command({ ping: 1 });
     }
 
-    async query(queryString: string, params?: any): Promise<any> {
+    async query(queryString: string, params?: QueryParams): Promise<unknown> {
         if (!this.db) {
             throw new Error("Database not connected");
         }
@@ -74,7 +87,7 @@ export class MongoDatabase extends Database {
         }
     }
 
-    async getSchema(collectionName?: string): Promise<any> {
+    async getSchema(collectionName?: string): Promise<CollectionInfo[]> {
         if (!this.db) {
             throw new Error("Database not connected");
         }
@@ -93,10 +106,13 @@ export class MongoDatabase extends Database {
         return [];
     }
 
-    private parseQuery(queryString: string, params?: any): MongoQueryPayload {
-        const rawPayload = params && typeof params === "object" && !Array.isArray(params)
-            ? params
-            : JSON.parse(queryString);
+    private parseQuery(queryString: string, params?: QueryParams): MongoQueryPayload {
+        // Not `as any`: the payload is unvalidated external input, so it is
+        // asserted to the expected shape once, after the guards below.
+        const rawPayload: Record<string, unknown> =
+            params && typeof params === "object" && !Array.isArray(params)
+                ? params
+                : JSON.parse(queryString);
 
         if (!rawPayload || typeof rawPayload !== "object") {
             throw new Error("MongoDB query must be an object or JSON object string");
@@ -106,10 +122,10 @@ export class MongoDatabase extends Database {
             throw new Error("MongoDB query requires operation and collection");
         }
 
-        return rawPayload as MongoQueryPayload;
+        return rawPayload as unknown as MongoQueryPayload;
     }
 
-    private async inspectCollection(collectionName: string): Promise<any> {
+    private async inspectCollection(collectionName: string): Promise<CollectionInfo> {
         if (!this.db) {
             throw new Error("Database not connected");
         }

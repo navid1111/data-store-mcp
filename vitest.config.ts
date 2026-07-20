@@ -11,7 +11,6 @@ export default defineConfig({
     // parallel workers don't contend over the fixture databases.
     pool: 'forks',
     maxWorkers: 1,
-    minWorkers: 1,
     reporters: ['verbose'],
   },
 });

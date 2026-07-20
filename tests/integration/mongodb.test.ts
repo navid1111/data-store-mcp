@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MongoDatabase } from '../../src/mongodb.js';
+import type { MongoConnectionConfig, Row } from '../../src/database-source.js';
 import { MONGO } from '../helpers/sources.js';
 import { seedMongo, SEEDED } from '../helpers/seed-mongo.js';
 
@@ -25,19 +26,25 @@ describe('MongoDatabase / seeded fixture', () => {
 
   describe('connect', () => {
     it('rejects a config missing uri or database', async () => {
-      const bad = new MongoDatabase({ id: 'bad', type: 'mongodb', options: {} });
+      // Cast is deliberate: the type now forbids this, but the runtime guard
+      // must still hold because configs can arrive from untyped JSON.
+      const bad = new MongoDatabase({
+        id: 'bad',
+        type: 'mongodb',
+        options: {},
+      } as unknown as MongoConnectionConfig);
       await expect(bad.connect()).rejects.toThrow(/requires both uri and database/);
     });
   });
 
   describe('query', () => {
     it('runs find with a filter and limit', async () => {
-      const rows = await db.query('', {
+      const rows = (await db.query('', {
         operation: 'find',
         collection: 'film',
         filter: { rating: 'G' },
         limit: 3,
-      });
+      })) as Row[];
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.length).toBeLessThanOrEqual(3);
       expect(rows.every((r: any) => r.rating === 'G')).toBe(true);
@@ -49,24 +56,24 @@ describe('MongoDatabase / seeded fixture', () => {
     });
 
     it('runs an aggregate pipeline', async () => {
-      const rows = await db.query('', {
+      const rows = (await db.query('', {
         operation: 'aggregate',
         collection: 'film',
         pipeline: [
           { $group: { _id: '$rating', n: { $sum: 1 } } },
           { $sort: { _id: 1 } },
         ],
-      });
+      })) as Array<{ _id: string; n: number }>;
       expect(rows.length).toBeGreaterThan(1);
-      expect(rows.reduce((s: number, r: any) => s + r.n, 0)).toBe(SEEDED.films);
+      expect(rows.reduce((sum, r) => sum + r.n, 0)).toBe(SEEDED.films);
     });
 
     it('runs distinct', async () => {
-      const values = await db.query('', {
+      const values = (await db.query('', {
         operation: 'distinct',
         collection: 'film',
         field: 'rating',
-      });
+      })) as string[];
       expect(values.length).toBeGreaterThan(1);
     });
 

@@ -5,11 +5,15 @@
  * env when pointing at something else (e.g. CI service containers).
  */
 
-import type { ConnectionConfig } from '../../src/database-source.js';
+import type {
+  MongoConnectionConfig,
+  MysqlConnectionConfig,
+  PostgresConnectionConfig,
+} from '../../src/database-source.js';
 
 const env = (key: string, fallback: string): string => process.env[key] ?? fallback;
 
-export const PAGILA: ConnectionConfig = {
+export const PAGILA: PostgresConnectionConfig = {
   id: 'test-pagila',
   type: 'postgres',
   description: 'Pagila sample database (PostgreSQL)',
@@ -22,7 +26,7 @@ export const PAGILA: ConnectionConfig = {
   },
 };
 
-export const SAKILA: ConnectionConfig = {
+export const SAKILA: MysqlConnectionConfig = {
   id: 'test-sakila',
   type: 'mysql',
   description: 'Sakila sample database (MySQL)',
@@ -40,7 +44,7 @@ export const SAKILA: ConnectionConfig = {
  * their own collections (see tests/helpers/seed-mongo.ts). Kept structurally
  * parallel to the SQL fixtures so the same assertions can be written against it.
  */
-export const MONGO: ConnectionConfig = {
+export const MONGO: MongoConnectionConfig = {
   id: 'test-mongo',
   type: 'mongodb',
   description: 'Seeded MongoDB fixture',

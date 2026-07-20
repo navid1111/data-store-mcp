@@ -39,7 +39,7 @@ column is what to work through.
 | 3 | 0.10 | E2E test driving the real MCP server over stdio | B6 | 0.8 | **done** |
 | 4 | 0.3 | Fix identifier injection in `getSchema` — Postgres `WHERE table_name = '...'`, MySQL `DESCRIBE ...` | B10 | 0.8 | **done** |
 | 5 | 0.11 | Return tool execution failures as `isError` results instead of throwing | B14, R2.2 | 0.10 | **done** |
-| 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | |
+| 6 | 0.2 | Type `ConnectionConfig.options` per source; drop `any` | B5 | — | **done** |
 | 7 | 0.4 | Define `ColumnInfo`, `TableInfo`, `ColumnProfile` in `sources/types.ts` | §5.1 | 0.2 | |
 | 8 | 0.9 | Fix `MysqlDatabase.getRelations` signature — declares `databaseName` required, base declares optional | B12 | 0.4 | |
 | 9 | 0.5 | Add `listTables()`; make `getSchema` return `ColumnInfo[]` uniformly across all three adapters | B7, B9, B13 | 0.4 | |

@@ -1,11 +1,17 @@
 
-import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
+import {
+    Database,
+    MssqlConnectionConfig,
+    QueryParams,
+    Row,
+    TableRelation,
+} from "./database-source.js";
 import sql from 'mssql';
 
-export class MssqlDatabase extends Database {
+export class MssqlDatabase extends Database<MssqlConnectionConfig> {
     private pool: sql.ConnectionPool | null = null;
 
-    constructor(config: ConnectionConfig) {
+    constructor(config: MssqlConnectionConfig) {
         super(config);
     }
 
@@ -35,7 +41,7 @@ export class MssqlDatabase extends Database {
         }
     }
 
-    async query(queryString: string, params?: any): Promise<any> {
+    async query(queryString: string, params?: QueryParams): Promise<Row[]> {
         if (!this.pool) {
             throw new Error("Database not connected");
         }
@@ -49,9 +55,9 @@ export class MssqlDatabase extends Database {
                     params.forEach((param, index) => {
                         request.input(`p${index}`, param);
                     });
-                } else if (typeof params === 'object') {
-                    Object.keys(params).forEach(key => {
-                        request.input(key, params[key]);
+                } else {
+                    Object.entries(params).forEach(([key, value]) => {
+                        request.input(key, value);
                     });
                 }
             }
@@ -64,7 +70,7 @@ export class MssqlDatabase extends Database {
         }
     }
 
-    async getSchema(tableName?: string): Promise<any> {
+    async getSchema(tableName?: string): Promise<Row[]> {
         if (!this.pool) {
             throw new Error("Database not connected");
         }

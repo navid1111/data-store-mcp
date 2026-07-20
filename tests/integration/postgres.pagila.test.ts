@@ -70,8 +70,9 @@ describe('PostgresDatabase / Pagila', () => {
       expect(names).toContain('rental_rate');
 
       const title = cols.find((c: any) => c.column_name === 'title');
-      expect(title.data_type).toMatch(/character varying|text/);
-      expect(title.is_nullable).toBe('NO');
+      expect(title).toBeDefined();
+      expect(title!.data_type).toMatch(/character varying|text/);
+      expect(title!.is_nullable).toBe('NO');
     });
 
     // GAP (spec B7): without a table name this returns every column in the

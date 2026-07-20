@@ -9,7 +9,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "fixtures": "./scripts/fetch-fixtures.sh",

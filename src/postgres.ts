@@ -1,12 +1,12 @@
 
-import { Database, ConnectionConfig, TableRelation } from "./database-source.js";
+import { Database, PostgresConnectionConfig, Row, TableRelation } from "./database-source.js";
 import { assertValidIdentifier } from "./identifiers.js";
 import pg from 'pg';
 
-export class PostgresDatabase extends Database {
+export class PostgresDatabase extends Database<PostgresConnectionConfig> {
     private pool: pg.Pool;
 
-    constructor(config: ConnectionConfig) {
+    constructor(config: PostgresConnectionConfig) {
         super(config);
         this.pool = new pg.Pool(config.options);
     }
@@ -20,12 +20,12 @@ export class PostgresDatabase extends Database {
         }
     }
 
-    async query(sql: string, params?: any): Promise<any> {
+    async query(sql: string, params?: unknown[]): Promise<Row[]> {
         const result = await this.pool.query(sql, params);
         return result.rows;
     }
 
-    async getSchema(tableName?: string): Promise<any> {
+    async getSchema(tableName?: string): Promise<Row[]> {
         // Validated for a consistent contract across adapters, and bound as a
         // parameter so the value never reaches the query string. Either alone
         // would close the injection; both keep the behaviour uniform with
