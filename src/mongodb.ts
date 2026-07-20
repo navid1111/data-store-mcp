@@ -34,6 +34,20 @@ function bsonTypeOf(value: unknown): string {
     return typeof value;
 }
 
+interface FieldObservation {
+    readonly types: Set<string>;
+    present: number;
+}
+
+interface CollectionMetadata {
+    readonly name: string;
+    readonly type?: string;
+    readonly options?: {
+        readonly viewOn?: string;
+        readonly pipeline?: readonly Document[];
+    };
+}
+
 export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPlan> {
     private client: MongoClient | null = null;
     private db: Db | null = null;
@@ -111,17 +125,21 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
 
     async listTables(): Promise<TableInfo[]> {
         const db = this.requireDb();
-        const collections = await db.listCollections({}, { nameOnly: true }).toArray();
+        const collections = await db.listCollections({}, { nameOnly: false }).toArray();
 
         return Promise.all(
-            collections.map(async (c) => ({
-                name: c.name,
-                schema: this.config.options.database,
-                // Mongo has no view/table distinction in listCollections with
-                // nameOnly; views would need `type` from the full listing.
-                kind: 'table' as const,
-                estimatedRowCount: await db.collection(c.name).estimatedDocumentCount(),
-            }))
+            collections
+                .filter((collection) => !collection.name.startsWith('system.'))
+                .map(async (collection) => ({
+                    name: collection.name,
+                    schema: this.config.options.database,
+                    kind: collection.type === 'view' ? 'view' as const : 'table' as const,
+                    ...(collection.type !== 'view' ? {
+                        estimatedRowCount: await db
+                            .collection(collection.name)
+                            .estimatedDocumentCount(),
+                    } : {}),
+                }))
         );
     }
 
@@ -130,7 +148,9 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
 
         const names = collectionName
             ? [collectionName]
-            : (await db.listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name);
+            : (await db.listCollections({}, { nameOnly: true }).toArray())
+                .map((collection) => collection.name)
+                .filter((name) => !name.startsWith('system.'));
 
         const perCollection = await Promise.all(
             names.map((name) => this.describeCollection(name))
@@ -158,14 +178,18 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
             collection.indexes().catch(() => []),
         ]);
 
-        /** Field name -> observed BSON type names and how many docs contained it. */
-        const fields = new Map<string, { types: Set<string>; present: number }>();
+        /** Dotted field path -> observed BSON types and document presence count. */
+        const fields = new Map<string, FieldObservation>();
         for (const doc of sample) {
-            for (const [key, value] of Object.entries(doc)) {
-                const entry = fields.get(key) ?? { types: new Set<string>(), present: 0 };
-                entry.types.add(bsonTypeOf(value));
+            const observed = new Map<string, Set<string>>();
+            for (const [field, value] of Object.entries(doc)) {
+                observeField(field, value, observed, false);
+            }
+            for (const [field, types] of observed) {
+                const entry = fields.get(field) ?? { types: new Set<string>(), present: 0 };
+                for (const type of types) entry.types.add(type);
                 entry.present += 1;
-                fields.set(key, entry);
+                fields.set(field, entry);
             }
         }
 
@@ -176,17 +200,20 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
                 .map((i) => Object.keys(i.key)[0])
         );
 
-        return [...fields.entries()].map(([field, info], index) => ({
-            table: name,
-            name: field,
-            // A union when the sample disagrees, rather than first-seen.
-            dataType: [...info.types].sort().join(' | '),
-            // Absent from some sampled documents means effectively nullable.
-            nullable: field !== '_id' && info.present < sample.length,
-            isPrimaryKey: field === '_id',
-            isUnique: field === '_id' || uniqueFields.has(field),
-            position: index + 1,
-        }));
+        return [...fields.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([field, info], index) => ({
+                table: name,
+                name: field,
+                // A union when the sample disagrees, rather than first-seen.
+                dataType: [...info.types].sort().join(' | '),
+                // Missing or explicitly null in a sampled document is nullable.
+                nullable: field !== '_id' &&
+                    (info.present < sample.length || info.types.has('null')),
+                isPrimaryKey: field === '_id',
+                isUnique: field === '_id' || uniqueFields.has(field),
+                position: index + 1,
+            }));
     }
 
     private requireDb(): Db {
@@ -216,10 +243,14 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
                     .aggregate([
                         { $match: { [field]: { $ne: null } } },
                         { $group: { _id: `$${field}`, frequency: { $sum: 1 } } },
-                        { $sort: { frequency: -1 } },
+                        // Stable tie-breaking keeps generated MDL idempotent.
+                        { $sort: { frequency: -1, _id: 1 } },
                         { $limit: opts.maxDistinctForTopValues + 1 },
                     ])
                     .toArray();
+                grouped.sort((left, right) =>
+                    Number(right.frequency) - Number(left.frequency) ||
+                    stableProfileKey(left._id).localeCompare(stableProfileKey(right._id)));
 
                 const nonNull = grouped.reduce((sum, g) => sum + Number(g.frequency), 0);
                 const distinctCount = grouped.length;
@@ -245,9 +276,113 @@ export class MongoDatabase extends Database<MongoConnectionConfig, MongoQueryPla
     }
 
     async getRelations(_databaseName?: string): Promise<TableRelation[]> {
-        return [];
+        const collections = await this.requireDb()
+            .listCollections({}, { nameOnly: false })
+            .toArray() as CollectionMetadata[];
+        const relations = collections.flatMap((collection) => {
+            const source = collection.options?.viewOn;
+            const pipeline = collection.options?.pipeline;
+            if (collection.type !== 'view' || !source || !Array.isArray(pipeline)) return [];
+            return lookupRelations(collection.name, source, pipeline);
+        });
+        return relations.sort((left, right) =>
+            left.constraintName.localeCompare(right.constraintName));
     }
 
+}
+
+function stableProfileKey(value: unknown): string {
+    return JSON.stringify(normalizeProfileValue(value));
+}
+
+function normalizeProfileValue(value: unknown): unknown {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'bigint') return value.toString();
+    if (Array.isArray(value)) return value.map(normalizeProfileValue);
+    if (value && typeof value === 'object') {
+        const bsonType = (value as { _bsontype?: unknown })._bsontype;
+        if (bsonType) return `${String(bsonType)}:${String(value)}`;
+        return Object.fromEntries(
+            Object.entries(value)
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([key, nested]) => [key, normalizeProfileValue(nested)]),
+        );
+    }
+    return value;
+}
+
+/** Records nested document fields as dotted paths; array nesting stays explicit. */
+function observeField(
+    path: string,
+    value: unknown,
+    observed: Map<string, Set<string>>,
+    repeated: boolean,
+): void {
+    const type = bsonTypeOf(value);
+    const recordedType = repeated && type !== 'null' ? `array<${type}>` : type;
+    const types = observed.get(path) ?? new Set<string>();
+    types.add(recordedType);
+    observed.set(path, types);
+
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            if (!isEmbeddedDocument(item)) continue;
+            for (const [field, nested] of Object.entries(item)) {
+                observeField(`${path}.${field}`, nested, observed, true);
+            }
+        }
+    } else if (isEmbeddedDocument(value)) {
+        for (const [field, nested] of Object.entries(value)) {
+            observeField(`${path}.${field}`, nested, observed, repeated);
+        }
+    }
+}
+
+function isEmbeddedDocument(value: unknown): value is Record<string, unknown> {
+    return Boolean(
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof Date) &&
+        !(value as { _bsontype?: unknown })._bsontype,
+    );
+}
+
+function lookupRelations(
+    viewName: string,
+    source: string,
+    pipeline: readonly Document[],
+): TableRelation[] {
+    const relations: TableRelation[] = [];
+    const visit = (value: unknown): void => {
+        if (Array.isArray(value)) {
+            for (const item of value) visit(item);
+            return;
+        }
+        if (!value || typeof value !== 'object') return;
+        const document = value as Record<string, unknown>;
+        const lookup = document.$lookup;
+        if (lookup && typeof lookup === 'object' && !Array.isArray(lookup)) {
+            const spec = lookup as Record<string, unknown>;
+            if (
+                typeof spec.from === 'string' &&
+                typeof spec.localField === 'string' &&
+                typeof spec.foreignField === 'string'
+            ) {
+                const alias = typeof spec.as === 'string' ? spec.as : spec.from;
+                relations.push({
+                    childTable: source,
+                    childColumn: spec.localField,
+                    constraintName: `lookup:${viewName}:${alias}`,
+                    parentTable: spec.from,
+                    parentColumn: spec.foreignField,
+                });
+            }
+        }
+        for (const nested of Object.values(document)) visit(nested);
+    };
+    visit(pipeline);
+    return relations;
 }
 
 async function collectCursor<T>(

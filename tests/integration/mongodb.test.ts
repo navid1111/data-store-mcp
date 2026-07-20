@@ -6,11 +6,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { MongoDatabase } from '../../src/mongodb.js';
 import type { MongoConnectionConfig, Row } from '../../src/database-source.js';
 import { MONGO } from '../helpers/sources.js';
 import { seedMongo, SEEDED } from '../helpers/seed-mongo.js';
 import { buildMongoPlan } from '../../src/governance/mongo.js';
+import { bootstrapMdl } from '../../src/semantic/bootstrap.js';
 
 describe('MongoDatabase / seeded fixture', () => {
   let db: MongoDatabase;
@@ -174,11 +178,17 @@ describe('MongoDatabase / seeded fixture', () => {
   describe('listTables', () => {
     it('returns the seeded collections with row estimates', async () => {
       const tables = await db.listTables();
-      expect(tables.map((t) => t.name).sort()).toEqual(['actor', 'film']);
+      expect(tables.map((t) => [t.name, t.kind])).toEqual(expect.arrayContaining([
+        ['actor', 'table'],
+        ['film', 'table'],
+        ['film_actor_lookup', 'view'],
+      ]));
 
       const film = tables.find((t) => t.name === 'film');
       expect(film!.estimatedRowCount).toBe(SEEDED.films);
       expect(film!.kind).toBe('table');
+      expect(tables.find((t) => t.name === 'film_actor_lookup')!.estimatedRowCount)
+        .toBeUndefined();
     });
   });
 
@@ -207,26 +217,79 @@ describe('MongoDatabase / seeded fixture', () => {
 
     it('covers every collection when called with no argument', async () => {
       const cols = await db.getSchema();
-      expect(new Set(cols.map((c) => c.table)).size).toBe(2);
+      expect(new Set(cols.map((c) => c.table)).size).toBe(3);
     });
 
-    // Previously inferred fields from a single findOne, so an optional field
-    // was invisible and a heterogeneous one reported its first-seen type.
-    it('infers a field union by sampling many documents', async () => {
+    it('infers optional fields and type unions by sampling many documents', async () => {
       const cols = await db.getSchema('film');
-      const rating = cols.find((c) => c.name === 'rating');
-      expect(rating!.dataType).toBe('string');
+      expect(cols.find((c) => c.name === 'festival_award')).toEqual(
+        expect.objectContaining({ dataType: 'string', nullable: true }),
+      );
+      expect(cols.find((c) => c.name === 'catalog_code')!.dataType)
+        .toBe('number | string');
+    });
 
-      // `actors` is an embedded array in every seeded document.
+    it('maps embedded documents to dotted nested columns', async () => {
+      const cols = await db.getSchema('film');
       expect(cols.find((c) => c.name === 'actors')!.dataType).toBe('array');
+      expect(cols.find((c) => c.name === 'actors.actor_id')!.dataType)
+        .toBe('array<number>');
+      expect(cols.find((c) => c.name === 'actors.full_name')!.dataType)
+        .toBe('array<string>');
+      expect(cols.find((c) => c.name === 'metadata.language')!.dataType).toBe('string');
+      expect(cols.find((c) => c.name === 'metadata.dimensions.runtime_minutes')!.dataType)
+        .toBe('number');
     });
   });
 
   describe('getRelations', () => {
-    // Documents spec.md D2: relationships are unavailable for document stores
-    // until Phase 4 maps $lookup / embedded documents into MDL.
-    it('returns no relations (documented D2 limitation)', async () => {
-      expect(await db.getRelations()).toEqual([]);
+    it('maps a view $lookup to the shared relationship contract', async () => {
+      expect(await db.getRelations()).toEqual([{
+        childTable: 'film',
+        childColumn: 'lead_actor_id',
+        constraintName: 'lookup:film_actor_lookup:lead_actor',
+        parentTable: 'actor',
+        parentColumn: 'actor_id',
+      }]);
+    });
+  });
+
+  describe('Mongo to MDL mapping', () => {
+    it('bootstraps sampled fields, nested columns, unions, and lookups', async () => {
+      const directory = await mkdtemp(join(tmpdir(), 'data-store-mcp-mongo-mdl-'));
+      try {
+        const outputPath = join(directory, 'mongo.yml');
+        const result = await bootstrapMdl(db, {
+          source: MONGO.id,
+          outputPath,
+        });
+        const film = result.document.models.find((model) => model.name === 'film');
+
+        expect(result.document.models.map((model) => model.name).sort())
+          .toEqual(['actor', 'film']);
+        expect(film?.columns.find((column) => column.name === 'festival_award')?.nullable)
+          .toBe(true);
+        expect(film?.columns.find((column) => column.name === 'catalog_code')?.dataType)
+          .toBe('number | string');
+        expect(film?.columns.find((column) => column.name === 'actors.actor_id')?.dataType)
+          .toBe('array<number>');
+        expect(result.document.relationships).toEqual([
+          expect.objectContaining({
+            fromModel: 'film',
+            toModel: 'actor',
+            cardinality: 'many-to-one',
+            joinKeys: [{ fromColumn: 'lead_actor_id', toColumn: 'actor_id' }],
+            provenance: 'introspection',
+            verified: false,
+          }),
+        ]);
+
+        const second = await bootstrapMdl(db, { source: MONGO.id, outputPath });
+        expect(second.changed).toBe(false);
+        expect(second.yaml).toBe(result.yaml);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
     });
   });
 });

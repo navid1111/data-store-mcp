@@ -2,9 +2,16 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { ColumnInfo, ColumnProfile, Database, ProfileOptions, TableInfo } from '../database-source.js';
+import type {
+    ColumnInfo,
+    ColumnProfile,
+    Database,
+    ProfileOptions,
+    TableInfo,
+    TableRelation,
+} from '../database-source.js';
 import { parseMdlYaml, stringifyMdlYaml } from './schema.js';
-import type { Column, MdlDocument, Model, SemanticScalar } from './types.js';
+import type { Column, MdlDocument, Model, Relationship, SemanticScalar } from './types.js';
 import { draftMdl, type DraftOptions } from './draft.js';
 
 export interface BootstrapOptions {
@@ -43,9 +50,10 @@ export async function bootstrapMdl(
         models.push(toModel(options.source, table, columns, profiles));
     }
 
+    const relationships = toRelationships(await database.getRelations(), models);
     const structuralDocument: MdlDocument = {
         models,
-        relationships: [],
+        relationships,
         metrics: [],
         views: [],
         cubes: [],
@@ -67,6 +75,101 @@ export async function bootstrapMdl(
         await writeFile(options.outputPath, yaml, 'utf8');
     }
     return { document: parsed, yaml, changed };
+}
+
+function toRelationships(relations: TableRelation[], models: Model[]): Relationship[] {
+    const modelsByTable = new Map(models.map((model) => [model.table, model]));
+    const grouped = new Map<string, TableRelation[]>();
+    for (const relation of relations) {
+        validateRelation(relation);
+        const key = [
+            relation.childTable,
+            relation.constraintName,
+            relation.parentTable,
+        ].join('\u0000');
+        const group = grouped.get(key) ?? [];
+        group.push(relation);
+        grouped.set(key, group);
+    }
+
+    return [...grouped.values()]
+        .sort((left, right) => relationshipKey(left[0]).localeCompare(relationshipKey(right[0])))
+        .flatMap((group) => {
+            const first = group[0];
+            const from = modelsByTable.get(first.childTable);
+            const to = modelsByTable.get(first.parentTable);
+            // Views are intentionally not emitted as bootstrap models. Ignore
+            // relationships whose endpoints therefore have no structural model.
+            if (!from || !to) return [];
+
+            const joinKeys = group
+                .sort((left, right) =>
+                    left.childColumn.localeCompare(right.childColumn) ||
+                    left.parentColumn.localeCompare(right.parentColumn))
+                .map((relation) => ({
+                    fromColumn: relation.childColumn,
+                    toColumn: relation.parentColumn,
+                }));
+            assertRelationshipColumns(from, to, joinKeys);
+            const parentIsUnique = joinKeys.every((key) => {
+                const column = to.columns.find((candidate) => candidate.name === key.toColumn);
+                return Boolean(column?.isPrimaryKey || column?.isUnique);
+            });
+
+            return [{
+                name: relationshipName(first),
+                description: `Relationship from ${from.name} to ${to.name} discovered by introspection.`,
+                provenance: 'introspection' as const,
+                verified: false,
+                fromModel: from.name,
+                toModel: to.name,
+                cardinality: parentIsUnique ? 'many-to-one' as const : 'many-to-many' as const,
+                joinKeys,
+            }];
+        });
+}
+
+function validateRelation(relation: TableRelation): void {
+    if (
+        !relation.childTable ||
+        !relation.childColumn ||
+        !relation.constraintName ||
+        !relation.parentTable ||
+        !relation.parentColumn
+    ) {
+        throw new Error(`Unexpected relationship introspection shape: ${JSON.stringify(relation)}.`);
+    }
+}
+
+function assertRelationshipColumns(
+    from: Model,
+    to: Model,
+    keys: Array<{ fromColumn: string; toColumn: string }>,
+): void {
+    for (const key of keys) {
+        if (!from.columns.some((column) => column.name === key.fromColumn)) {
+            throw new Error(`Relationship references missing column "${from.name}.${key.fromColumn}".`);
+        }
+        if (!to.columns.some((column) => column.name === key.toColumn)) {
+            throw new Error(`Relationship references missing column "${to.name}.${key.toColumn}".`);
+        }
+    }
+}
+
+function relationshipName(relation: TableRelation): string {
+    return `${relation.childTable}_${relation.constraintName}`
+        .replace(/[^A-Za-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function relationshipKey(relation: TableRelation): string {
+    return [
+        relation.childTable,
+        relation.constraintName,
+        relation.parentTable,
+        relation.childColumn,
+        relation.parentColumn,
+    ].join('\u0000');
 }
 
 function validateTables(tables: TableInfo[]): void {
