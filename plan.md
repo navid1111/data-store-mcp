@@ -163,7 +163,7 @@ if it turns into a project of its own.
 |---|---|---|---|
 | 3.1 | Golden eval runner over `queries.yml`; pass-rate report | R7.1 | 2.13 **done** |
 | 3.2 | Eval in CI on every MDL change | R7.3 | 3.1 **done** |
-| 3.3 | LanceDB index of successful executions | R5.1 | 1.11 |
+| 3.3 | LanceDB index of successful executions | R5.1 | 1.11 **done** |
 | 3.4 | Hybrid retrieval: BM25 + vector, reciprocal rank fusion | R5.2 | 3.3 |
 | 3.5 | `search_context` tool; precedents labeled as prior art, not truth | R5.3, R6.1 | 3.4 |
 | 3.6 | Promote approved queries into `queries.yml` | R5.4 | 3.5 |
