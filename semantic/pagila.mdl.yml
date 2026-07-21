@@ -1,0 +1,2950 @@
+models:
+  - name: actor
+    description: Table actor.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: actor
+    kind: table
+    columns:
+      - name: actor_id
+        description: Column actor_id on actor.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: actor_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 200
+          nullRate: 0
+          min: 1
+          max: 200
+      - name: first_name
+        description: Column first_name on actor.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: first_name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 128
+          nullRate: 0
+      - name: last_name
+        description: Column last_name on actor.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: last_name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 121
+          nullRate: 0
+      - name: last_update
+        description: Column last_update on actor.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:34:33.000Z
+          max: 2022-02-15T09:34:33.000Z
+          topValues:
+            - value: 2022-02-15T09:34:33.000Z
+              count: 200
+  - name: address
+    description: Table address.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: address
+    kind: table
+    columns:
+      - name: address_id
+        description: Column address_id on address.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: address_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 603
+          nullRate: 0
+          min: 1
+          max: 605
+      - name: address
+        description: Column address on address.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: address
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 603
+          nullRate: 0
+      - name: address2
+        description: Column address2 on address.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: address2
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0.006633499170812604
+          topValues:
+            - value: ""
+              count: 599
+      - name: district
+        description: Column district on address.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: district
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 378
+          nullRate: 0
+      - name: city_id
+        description: Column city_id on address.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: city_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+          min: 1
+          max: 600
+      - name: postal_code
+        description: Column postal_code on address.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: postal_code
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 597
+          nullRate: 0
+      - name: phone
+        description: Column phone on address.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: phone
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 602
+          nullRate: 0
+      - name: last_update
+        description: Column last_update on address.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:45:30.000Z
+          max: 2022-02-15T09:45:30.000Z
+          topValues:
+            - value: 2022-02-15T09:45:30.000Z
+              count: 603
+  - name: category
+    description: Table category.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: category
+    kind: table
+    columns:
+      - name: category_id
+        description: Column category_id on category.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: category_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 16
+          nullRate: 0
+          min: 1
+          max: 16
+          topValues:
+            - value: 1
+              count: 1
+            - value: 2
+              count: 1
+            - value: 3
+              count: 1
+            - value: 4
+              count: 1
+            - value: 5
+              count: 1
+            - value: 6
+              count: 1
+            - value: 7
+              count: 1
+            - value: 8
+              count: 1
+            - value: 9
+              count: 1
+            - value: 10
+              count: 1
+            - value: 11
+              count: 1
+            - value: 12
+              count: 1
+            - value: 13
+              count: 1
+            - value: 14
+              count: 1
+            - value: 15
+              count: 1
+            - value: 16
+              count: 1
+      - name: name
+        description: Column name on category.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 16
+          nullRate: 0
+          topValues:
+            - value: Action
+              count: 1
+            - value: Animation
+              count: 1
+            - value: Children
+              count: 1
+            - value: Classics
+              count: 1
+            - value: Comedy
+              count: 1
+            - value: Documentary
+              count: 1
+            - value: Drama
+              count: 1
+            - value: Family
+              count: 1
+            - value: Foreign
+              count: 1
+            - value: Games
+              count: 1
+            - value: Horror
+              count: 1
+            - value: Music
+              count: 1
+            - value: New
+              count: 1
+            - value: Sci-Fi
+              count: 1
+            - value: Sports
+              count: 1
+            - value: Travel
+              count: 1
+      - name: last_update
+        description: Column last_update on category.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:46:27.000Z
+          max: 2022-02-15T09:46:27.000Z
+          topValues:
+            - value: 2022-02-15T09:46:27.000Z
+              count: 16
+  - name: city
+    description: Table city.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: city
+    kind: table
+    columns:
+      - name: city_id
+        description: Column city_id on city.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: city_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 600
+          nullRate: 0
+          min: 1
+          max: 600
+      - name: city
+        description: Column city on city.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: city
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+      - name: country_id
+        description: Column country_id on city.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: country_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 109
+          nullRate: 0
+          min: 1
+          max: 109
+      - name: last_update
+        description: Column last_update on city.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:45:25.000Z
+          max: 2022-02-15T09:45:25.000Z
+          topValues:
+            - value: 2022-02-15T09:45:25.000Z
+              count: 600
+  - name: country
+    description: Table country.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: country
+    kind: table
+    columns:
+      - name: country_id
+        description: Column country_id on country.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: country_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 109
+          nullRate: 0
+          min: 1
+          max: 109
+      - name: country
+        description: Column country on country.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: country
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 109
+          nullRate: 0
+      - name: last_update
+        description: Column last_update on country.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:44:00.000Z
+          max: 2022-02-15T09:44:00.000Z
+          topValues:
+            - value: 2022-02-15T09:44:00.000Z
+              count: 109
+  - name: customer
+    description: Table customer.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: customer
+    kind: table
+    columns:
+      - name: customer_id
+        description: Column customer_id on customer.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 599
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: store_id
+        description: Column store_id on customer.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: store_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 1
+              count: 326
+            - value: 2
+              count: 273
+      - name: first_name
+        description: Column first_name on customer.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: first_name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 591
+          nullRate: 0
+      - name: last_name
+        description: Column last_name on customer.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: last_name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+      - name: email
+        description: Column email on customer.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: email
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+      - name: address_id
+        description: Column address_id on customer.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: address_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+          min: 5
+          max: 605
+      - name: activebool
+        description: Column activebool on customer.
+        provenance: introspection
+        verified: false
+        dataType: boolean
+        sourceColumn: activebool
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          topValues:
+            - value: true
+              count: 599
+      - name: create_date
+        description: Column create_date on customer.
+        provenance: introspection
+        verified: false
+        dataType: date
+        sourceColumn: create_date
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-13T18:00:00.000Z
+          max: 2022-02-13T18:00:00.000Z
+          topValues:
+            - value: 2022-02-13T18:00:00.000Z
+              count: 599
+      - name: last_update
+        description: Column last_update on customer.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:57:20.000Z
+          max: 2022-02-15T09:57:20.000Z
+          topValues:
+            - value: 2022-02-15T09:57:20.000Z
+              count: 599
+      - name: active
+        description: Column active on customer.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: active
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 0
+          max: 1
+          topValues:
+            - value: 1
+              count: 584
+            - value: 0
+              count: 15
+  - name: film
+    description: Table film.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: film
+    kind: table
+    columns:
+      - name: film_id
+        description: Column film_id on film.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: film_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+          min: 1
+          max: 1000
+      - name: title
+        description: Column title on film.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: title
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+      - name: description
+        description: Column description on film.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: description
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+      - name: release_year
+        description: Column release_year on film.
+        provenance: introspection
+        verified: false
+        dataType: year
+        sourceColumn: release_year
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 19
+          nullRate: 0
+          min: 2006
+          max: 2024
+          topValues:
+            - value: 2016
+              count: 63
+            - value: 2006
+              count: 60
+            - value: 2018
+              count: 59
+            - value: 2020
+              count: 58
+            - value: 2019
+              count: 56
+            - value: 2007
+              count: 55
+            - value: 2021
+              count: 55
+            - value: 2022
+              count: 55
+            - value: 2010
+              count: 54
+            - value: 2023
+              count: 53
+            - value: 2011
+              count: 52
+            - value: 2013
+              count: 52
+            - value: 2012
+              count: 50
+            - value: 2015
+              count: 50
+            - value: 2009
+              count: 49
+            - value: 2024
+              count: 48
+            - value: 2008
+              count: 46
+            - value: 2017
+              count: 45
+            - value: 2014
+              count: 40
+      - name: language_id
+        description: Column language_id on film.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: language_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 6
+          nullRate: 0
+          min: 1
+          max: 6
+          topValues:
+            - value: 1
+              count: 585
+            - value: 4
+              count: 90
+            - value: 2
+              count: 87
+            - value: 6
+              count: 87
+            - value: 5
+              count: 79
+            - value: 3
+              count: 72
+      - name: original_language_id
+        description: Column original_language_id on film.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: original_language_id
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 0
+          nullRate: 1
+      - name: rental_duration
+        description: Column rental_duration on film.
+        provenance: introspection
+        verified: false
+        dataType: smallint
+        sourceColumn: rental_duration
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 5
+          nullRate: 0
+          min: 3
+          max: 7
+          topValues:
+            - value: 6
+              count: 212
+            - value: 3
+              count: 203
+            - value: 4
+              count: 203
+            - value: 5
+              count: 191
+            - value: 7
+              count: 191
+      - name: rental_rate
+        description: Column rental_rate on film.
+        provenance: introspection
+        verified: false
+        dataType: numeric(4,2)
+        sourceColumn: rental_rate
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 3
+          nullRate: 0
+          min: "0.99"
+          max: "4.99"
+          topValues:
+            - value: "0.99"
+              count: 341
+            - value: "4.99"
+              count: 336
+            - value: "2.99"
+              count: 323
+      - name: length
+        description: Column length on film.
+        provenance: introspection
+        verified: false
+        dataType: smallint
+        sourceColumn: length
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 140
+          nullRate: 0
+          min: 46
+          max: 185
+      - name: replacement_cost
+        description: Column replacement_cost on film.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: replacement_cost
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 21
+          nullRate: 0
+          min: "9.99"
+          max: "29.99"
+          topValues:
+            - value: "20.99"
+              count: 57
+            - value: "12.99"
+              count: 55
+            - value: "13.99"
+              count: 55
+            - value: "21.99"
+              count: 55
+            - value: "22.99"
+              count: 55
+            - value: "27.99"
+              count: 53
+            - value: "29.99"
+              count: 53
+            - value: "14.99"
+              count: 51
+            - value: "19.99"
+              count: 50
+            - value: "10.99"
+              count: 49
+            - value: "11.99"
+              count: 49
+            - value: "17.99"
+              count: 47
+            - value: "26.99"
+              count: 46
+            - value: "23.99"
+              count: 45
+            - value: "25.99"
+              count: 43
+            - value: "18.99"
+              count: 42
+            - value: "9.99"
+              count: 41
+            - value: "28.99"
+              count: 41
+            - value: "16.99"
+              count: 38
+            - value: "24.99"
+              count: 38
+      - name: rating
+        description: Column rating on film.
+        provenance: introspection
+        verified: false
+        dataType: mpaa_rating
+        sourceColumn: rating
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 5
+          nullRate: 0
+          topValues:
+            - value: PG-13
+              count: 223
+            - value: NC-17
+              count: 210
+            - value: R
+              count: 195
+            - value: PG
+              count: 194
+            - value: G
+              count: 178
+      - name: last_update
+        description: Column last_update on film.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-09-10T16:46:03.905Z
+          max: 2022-09-10T16:46:03.905Z
+          topValues:
+            - value: 2022-09-10T16:46:03.905Z
+              count: 1000
+      - name: special_features
+        description: Column special_features on film.
+        provenance: introspection
+        verified: false
+        dataType: text[]
+        sourceColumn: special_features
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15
+          nullRate: 0
+          topValues:
+            - value: '["Trailers","Commentaries","Behind the Scenes"]'
+              count: 79
+            - value: '["Trailers"]'
+              count: 72
+            - value: '["Trailers","Behind the Scenes"]'
+              count: 72
+            - value: '["Trailers","Commentaries"]'
+              count: 72
+            - value: '["Deleted Scenes","Behind the Scenes"]'
+              count: 71
+            - value: '["Behind the Scenes"]'
+              count: 70
+            - value: '["Commentaries","Behind the Scenes"]'
+              count: 70
+            - value: '["Commentaries","Deleted Scenes","Behind the Scenes"]'
+              count: 66
+            - value: '["Trailers","Deleted Scenes"]'
+              count: 66
+            - value: '["Commentaries","Deleted Scenes"]'
+              count: 65
+            - value: '["Trailers","Commentaries","Deleted Scenes"]'
+              count: 64
+            - value: '["Commentaries"]'
+              count: 62
+            - value: '["Deleted Scenes"]'
+              count: 61
+            - value: '["Trailers","Commentaries","Deleted Scenes","Behind the Scenes"]'
+              count: 61
+            - value: '["Trailers","Deleted Scenes","Behind the Scenes"]'
+              count: 49
+      - name: fulltext
+        description: Column fulltext on film.
+        provenance: introspection
+        verified: false
+        dataType: tsvector
+        sourceColumn: fulltext
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+  - name: film_actor
+    description: Table film_actor.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: film_actor
+    kind: table
+    columns:
+      - name: actor_id
+        description: Column actor_id on film_actor.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: actor_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 200
+          nullRate: 0
+          min: 1
+          max: 200
+      - name: film_id
+        description: Column film_id on film_actor.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: film_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 997
+          nullRate: 0
+          min: 1
+          max: 1000
+      - name: last_update
+        description: Column last_update on film_actor.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T10:05:03.000Z
+          max: 2022-02-15T10:05:03.000Z
+          topValues:
+            - value: 2022-02-15T10:05:03.000Z
+              count: 5462
+  - name: film_category
+    description: Table film_category.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: film_category
+    kind: table
+    columns:
+      - name: film_id
+        description: Column film_id on film_category.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: film_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 1000
+          nullRate: 0
+          min: 1
+          max: 1000
+      - name: category_id
+        description: Column category_id on film_category.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: category_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 16
+          nullRate: 0
+          min: 1
+          max: 16
+          topValues:
+            - value: 7
+              count: 152
+            - value: 12
+              count: 152
+            - value: 16
+              count: 151
+            - value: 3
+              count: 150
+            - value: 9
+              count: 150
+            - value: 10
+              count: 150
+            - value: 1
+              count: 149
+            - value: 14
+              count: 149
+            - value: 2
+              count: 148
+            - value: 4
+              count: 147
+            - value: 8
+              count: 147
+            - value: 13
+              count: 147
+            - value: 6
+              count: 145
+            - value: 15
+              count: 145
+            - value: 5
+              count: 143
+            - value: 11
+              count: 142
+      - name: last_update
+        description: Column last_update on film_category.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T10:07:09.000Z
+          max: 2022-02-15T10:07:09.000Z
+          topValues:
+            - value: 2022-02-15T10:07:09.000Z
+              count: 2367
+  - name: inventory
+    description: Table inventory.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: inventory
+    kind: table
+    columns:
+      - name: inventory_id
+        description: Column inventory_id on inventory.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: inventory_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 4581
+          nullRate: 0
+          min: 1
+          max: 4581
+      - name: film_id
+        description: Column film_id on inventory.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: film_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 958
+          nullRate: 0
+          min: 1
+          max: 1000
+      - name: store_id
+        description: Column store_id on inventory.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: store_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 2
+              count: 2311
+            - value: 1
+              count: 2270
+      - name: last_update
+        description: Column last_update on inventory.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T10:09:17.000Z
+          max: 2022-02-15T10:09:17.000Z
+          topValues:
+            - value: 2022-02-15T10:09:17.000Z
+              count: 4581
+  - name: language
+    description: Table language.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: language
+    kind: table
+    columns:
+      - name: language_id
+        description: Column language_id on language.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: language_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 6
+          nullRate: 0
+          min: 1
+          max: 6
+          topValues:
+            - value: 1
+              count: 1
+            - value: 2
+              count: 1
+            - value: 3
+              count: 1
+            - value: 4
+              count: 1
+            - value: 5
+              count: 1
+            - value: 6
+              count: 1
+      - name: name
+        description: Column name on language.
+        provenance: introspection
+        verified: false
+        dataType: character(20)
+        sourceColumn: name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 6
+          nullRate: 0
+          topValues:
+            - value: "English             "
+              count: 1
+            - value: "French              "
+              count: 1
+            - value: "German              "
+              count: 1
+            - value: "Italian             "
+              count: 1
+            - value: "Japanese            "
+              count: 1
+            - value: "Mandarin            "
+              count: 1
+      - name: last_update
+        description: Column last_update on language.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T10:02:19.000Z
+          max: 2022-02-15T10:02:19.000Z
+          topValues:
+            - value: 2022-02-15T10:02:19.000Z
+              count: 6
+  - name: payment
+    description: Table payment.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 16049
+          nullRate: 0
+          min: 16050
+          max: 32098
+      - name: customer_id
+        description: Column customer_id on payment.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: staff_id
+        description: Column staff_id on payment.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 1
+              count: 8057
+            - value: 2
+              count: 7992
+      - name: rental_id
+        description: Column rental_id on payment.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 16044
+          nullRate: 0
+          min: 1
+          max: 16049
+      - name: amount
+        description: Column amount on payment.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 19
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "4.99"
+              count: 3789
+            - value: "2.99"
+              count: 3542
+            - value: "0.99"
+              count: 2979
+            - value: "5.99"
+              count: 1299
+            - value: "6.99"
+              count: 1119
+            - value: "3.99"
+              count: 1109
+            - value: "7.99"
+              count: 670
+            - value: "1.99"
+              count: 640
+            - value: "8.99"
+              count: 485
+            - value: "9.99"
+              count: 256
+            - value: "10.99"
+              count: 104
+            - value: "0.00"
+              count: 24
+            - value: "11.99"
+              count: 10
+            - value: "3.98"
+              count: 8
+            - value: "5.98"
+              count: 7
+            - value: "7.98"
+              count: 5
+            - value: "1.98"
+              count: 1
+            - value: "8.97"
+              count: 1
+            - value: "9.98"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 16049
+          nullRate: 0
+          min: 2022-01-23T13:03:52.212Z
+          max: 2022-07-27T10:39:20.739Z
+  - name: payment_p2022_01
+    description: Table payment_p2022_01.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_01
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_01.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 723
+          nullRate: 0
+          min: 16051
+          max: 32088
+      - name: customer_id
+        description: Column customer_id on payment_p2022_01.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 393
+          nullRate: 0
+          min: 1
+          max: 596
+      - name: staff_id
+        description: Column staff_id on payment_p2022_01.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 2
+              count: 370
+            - value: 1
+              count: 353
+      - name: rental_id
+        description: Column rental_id on payment_p2022_01.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 723
+          nullRate: 0
+          min: 31
+          max: 16032
+      - name: amount
+        description: Column amount on payment_p2022_01.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 13
+          nullRate: 0
+          min: "0.00"
+          max: "10.99"
+          topValues:
+            - value: "4.99"
+              count: 167
+            - value: "2.99"
+              count: 155
+            - value: "0.99"
+              count: 124
+            - value: "5.99"
+              count: 60
+            - value: "3.99"
+              count: 59
+            - value: "6.99"
+              count: 56
+            - value: "7.99"
+              count: 38
+            - value: "1.99"
+              count: 27
+            - value: "8.99"
+              count: 17
+            - value: "9.99"
+              count: 12
+            - value: "10.99"
+              count: 5
+            - value: "0.00"
+              count: 2
+            - value: "3.98"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment_p2022_01.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 723
+          nullRate: 0
+          min: 2022-01-23T13:03:52.212Z
+          max: 2022-01-31T23:24:45.836Z
+  - name: payment_p2022_02
+    description: Table payment_p2022_02.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_02
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_02.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2401
+          nullRate: 0
+          min: 16056
+          max: 32097
+      - name: customer_id
+        description: Column customer_id on payment_p2022_02.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 592
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: staff_id
+        description: Column staff_id on payment_p2022_02.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 2
+              count: 1229
+            - value: 1
+              count: 1172
+      - name: rental_id
+        description: Column rental_id on payment_p2022_02.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2401
+          nullRate: 0
+          min: 2
+          max: 16049
+      - name: amount
+        description: Column amount on payment_p2022_02.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 16
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "4.99"
+              count: 572
+            - value: "2.99"
+              count: 540
+            - value: "0.99"
+              count: 430
+            - value: "5.99"
+              count: 187
+            - value: "6.99"
+              count: 175
+            - value: "3.99"
+              count: 160
+            - value: "1.99"
+              count: 99
+            - value: "7.99"
+              count: 97
+            - value: "8.99"
+              count: 76
+            - value: "9.99"
+              count: 35
+            - value: "10.99"
+              count: 21
+            - value: "0.00"
+              count: 3
+            - value: "7.98"
+              count: 2
+            - value: "11.99"
+              count: 2
+            - value: "3.98"
+              count: 1
+            - value: "8.97"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment_p2022_02.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2401
+          nullRate: 0
+          min: 2022-02-01T00:47:34.674Z
+          max: 2022-02-28T23:44:23.819Z
+  - name: payment_p2022_03
+    description: Table payment_p2022_03.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_03
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_03.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2713
+          nullRate: 0
+          min: 16053
+          max: 32078
+      - name: customer_id
+        description: Column customer_id on payment_p2022_03.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 591
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: staff_id
+        description: Column staff_id on payment_p2022_03.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 1
+              count: 1410
+            - value: 2
+              count: 1303
+      - name: rental_id
+        description: Column rental_id on payment_p2022_03.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2713
+          nullRate: 0
+          min: 3
+          max: 16047
+      - name: amount
+        description: Column amount on payment_p2022_03.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "4.99"
+              count: 645
+            - value: "2.99"
+              count: 629
+            - value: "0.99"
+              count: 490
+            - value: "5.99"
+              count: 202
+            - value: "3.99"
+              count: 184
+            - value: "6.99"
+              count: 184
+            - value: "7.99"
+              count: 133
+            - value: "1.99"
+              count: 103
+            - value: "8.99"
+              count: 85
+            - value: "9.99"
+              count: 37
+            - value: "10.99"
+              count: 14
+            - value: "0.00"
+              count: 2
+            - value: "5.98"
+              count: 2
+            - value: "11.99"
+              count: 2
+            - value: "7.98"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment_p2022_03.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2713
+          nullRate: 0
+          min: 2022-03-01T00:08:43.059Z
+          max: 2022-03-31T23:46:26.236Z
+  - name: payment_p2022_04
+    description: Table payment_p2022_04.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_04
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_04.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2547
+          nullRate: 0
+          min: 16066
+          max: 32096
+      - name: customer_id
+        description: Column customer_id on payment_p2022_04.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 592
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: staff_id
+        description: Column staff_id on payment_p2022_04.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 1
+              count: 1284
+            - value: 2
+              count: 1263
+      - name: rental_id
+        description: Column rental_id on payment_p2022_04.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2547
+          nullRate: 0
+          min: 4
+          max: 16044
+      - name: amount
+        description: Column amount on payment_p2022_04.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "2.99"
+              count: 591
+            - value: "4.99"
+              count: 581
+            - value: "0.99"
+              count: 451
+            - value: "5.99"
+              count: 199
+            - value: "3.99"
+              count: 177
+            - value: "6.99"
+              count: 176
+            - value: "1.99"
+              count: 112
+            - value: "7.99"
+              count: 96
+            - value: "8.99"
+              count: 81
+            - value: "9.99"
+              count: 56
+            - value: "10.99"
+              count: 19
+            - value: "0.00"
+              count: 3
+            - value: "3.98"
+              count: 2
+            - value: "5.98"
+              count: 2
+            - value: "11.99"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment_p2022_04.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2547
+          nullRate: 0
+          min: 2022-04-01T00:02:24.640Z
+          max: 2022-04-30T23:41:00.471Z
+  - name: payment_p2022_05
+    description: Table payment_p2022_05.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_05
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_05.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2677
+          nullRate: 0
+          min: 16055
+          max: 32092
+      - name: customer_id
+        description: Column customer_id on payment_p2022_05.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 595
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: staff_id
+        description: Column staff_id on payment_p2022_05.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 1
+              count: 1362
+            - value: 2
+              count: 1315
+      - name: rental_id
+        description: Column rental_id on payment_p2022_05.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2677
+          nullRate: 0
+          min: 15
+          max: 16048
+      - name: amount
+        description: Column amount on payment_p2022_05.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "4.99"
+              count: 661
+            - value: "2.99"
+              count: 563
+            - value: "0.99"
+              count: 512
+            - value: "5.99"
+              count: 233
+            - value: "6.99"
+              count: 207
+            - value: "3.99"
+              count: 165
+            - value: "7.99"
+              count: 108
+            - value: "8.99"
+              count: 84
+            - value: "1.99"
+              count: 80
+            - value: "9.99"
+              count: 37
+            - value: "10.99"
+              count: 17
+            - value: "0.00"
+              count: 7
+            - value: "3.98"
+              count: 1
+            - value: "7.98"
+              count: 1
+            - value: "11.99"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment_p2022_05.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2677
+          nullRate: 0
+          min: 2022-05-01T00:12:20.535Z
+          max: 2022-05-31T23:34:54.651Z
+  - name: payment_p2022_06
+    description: Table payment_p2022_06.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_06
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_06.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2654
+          nullRate: 0
+          min: 16050
+          max: 32094
+      - name: customer_id
+        description: Column customer_id on payment_p2022_06.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 593
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: staff_id
+        description: Column staff_id on payment_p2022_06.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 2
+              count: 1340
+            - value: 1
+              count: 1314
+      - name: rental_id
+        description: Column rental_id on payment_p2022_06.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2654
+          nullRate: 0
+          min: 7
+          max: 16046
+      - name: amount
+        description: Column amount on payment_p2022_06.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "4.99"
+              count: 607
+            - value: "2.99"
+              count: 553
+            - value: "0.99"
+              count: 533
+            - value: "5.99"
+              count: 213
+            - value: "3.99"
+              count: 197
+            - value: "6.99"
+              count: 162
+            - value: "1.99"
+              count: 129
+            - value: "7.99"
+              count: 113
+            - value: "8.99"
+              count: 78
+            - value: "9.99"
+              count: 45
+            - value: "10.99"
+              count: 15
+            - value: "0.00"
+              count: 3
+            - value: "3.98"
+              count: 2
+            - value: "5.98"
+              count: 2
+            - value: "11.99"
+              count: 2
+      - name: payment_date
+        description: Column payment_date on payment_p2022_06.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2654
+          nullRate: 0
+          min: 2022-06-01T00:11:00.369Z
+          max: 2022-06-30T23:50:56.953Z
+  - name: payment_p2022_07
+    description: Table payment_p2022_07.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: payment_p2022_07
+    kind: table
+    columns:
+      - name: payment_id
+        description: Column payment_id on payment_p2022_07.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: payment_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2334
+          nullRate: 0
+          min: 16061
+          max: 32098
+      - name: customer_id
+        description: Column customer_id on payment_p2022_07.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 590
+          nullRate: 0
+          min: 1
+          max: 598
+      - name: staff_id
+        description: Column staff_id on payment_p2022_07.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 2
+              count: 1172
+            - value: 1
+              count: 1162
+      - name: rental_id
+        description: Column rental_id on payment_p2022_07.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2330
+          nullRate: 0
+          min: 1
+          max: 16042
+      - name: amount
+        description: Column amount on payment_p2022_07.
+        provenance: introspection
+        verified: false
+        dataType: numeric(5,2)
+        sourceColumn: amount
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 18
+          nullRate: 0
+          min: "0.00"
+          max: "11.99"
+          topValues:
+            - value: "4.99"
+              count: 556
+            - value: "2.99"
+              count: 511
+            - value: "0.99"
+              count: 439
+            - value: "5.99"
+              count: 205
+            - value: "3.99"
+              count: 167
+            - value: "6.99"
+              count: 159
+            - value: "1.99"
+              count: 90
+            - value: "7.99"
+              count: 85
+            - value: "8.99"
+              count: 64
+            - value: "9.99"
+              count: 34
+            - value: "10.99"
+              count: 13
+            - value: "0.00"
+              count: 4
+            - value: "11.99"
+              count: 2
+            - value: "1.98"
+              count: 1
+            - value: "3.98"
+              count: 1
+            - value: "5.98"
+              count: 1
+            - value: "7.98"
+              count: 1
+            - value: "9.98"
+              count: 1
+      - name: payment_date
+        description: Column payment_date on payment_p2022_07.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: payment_date
+        nullable: false
+        isPrimaryKey: true
+        isUnique: false
+        profile:
+          distinctCount: 2334
+          nullRate: 0
+          min: 2022-07-01T00:19:24.037Z
+          max: 2022-07-27T10:39:20.739Z
+  - name: rental
+    description: Table rental.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: rental
+    kind: table
+    columns:
+      - name: rental_id
+        description: Column rental_id on rental.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: rental_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 16044
+          nullRate: 0
+          min: 1
+          max: 16049
+      - name: rental_date
+        description: Column rental_date on rental.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: rental_date
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15815
+          nullRate: 0
+          min: 2022-02-14T15:16:03.000Z
+          max: 2022-08-23T21:50:12.000Z
+      - name: inventory_id
+        description: Column inventory_id on rental.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: inventory_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 4580
+          nullRate: 0
+          min: 1
+          max: 4581
+      - name: customer_id
+        description: Column customer_id on rental.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: customer_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 599
+          nullRate: 0
+          min: 1
+          max: 599
+      - name: return_date
+        description: Column return_date on rental.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: return_date
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 15836
+          nullRate: 0.011406133133881825
+          min: 2022-05-25T22:55:21.000Z
+          max: 2022-09-02T01:35:22.000Z
+      - name: staff_id
+        description: Column staff_id on rental.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 2
+          nullRate: 0
+          min: 1
+          max: 2
+          topValues:
+            - value: 1
+              count: 8040
+            - value: 2
+              count: 8004
+      - name: last_update
+        description: Column last_update on rental.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 3
+          nullRate: 0
+          min: 2022-02-15T21:30:53.000Z
+          max: 2022-02-23T09:12:08.000Z
+          topValues:
+            - value: 2022-02-16T02:30:53.000Z
+              count: 16042
+            - value: 2022-02-15T21:30:53.000Z
+              count: 1
+            - value: 2022-02-23T09:12:08.000Z
+              count: 1
+  - name: staff
+    description: Table staff.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: staff
+    kind: table
+    columns:
+      - name: staff_id
+        description: Column staff_id on staff.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: staff_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 1500
+          nullRate: 0
+          min: 0
+          max: 1499
+      - name: first_name
+        description: Column first_name on staff.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: first_name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1201
+          nullRate: 0
+      - name: last_name
+        description: Column last_name on staff.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: last_name
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 453
+          nullRate: 0
+      - name: address_id
+        description: Column address_id on staff.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: address_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 552
+          nullRate: 0
+          min: 2
+          max: 605
+      - name: email
+        description: Column email on staff.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: email
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1500
+          nullRate: 0
+      - name: store_id
+        description: Column store_id on staff.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: store_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 475
+          nullRate: 0
+          min: 1
+          max: 499
+      - name: active
+        description: Column active on staff.
+        provenance: introspection
+        verified: false
+        dataType: boolean
+        sourceColumn: active
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          topValues:
+            - value: true
+              count: 1500
+      - name: username
+        description: Column username on staff.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: username
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1499
+          nullRate: 0
+      - name: password
+        description: Column password on staff.
+        provenance: introspection
+        verified: false
+        dataType: text
+        sourceColumn: password
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          topValues:
+            - value: 8cb2237d0679ca88db6464eac60da96345513964
+              count: 1500
+      - name: last_update
+        description: Column last_update on staff.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-05-16T15:13:11.793Z
+          max: 2022-05-16T15:13:11.793Z
+          topValues:
+            - value: 2022-05-16T15:13:11.793Z
+              count: 1500
+      - name: picture
+        description: Column picture on staff.
+        provenance: introspection
+        verified: false
+        dataType: bytea
+        sourceColumn: picture
+        nullable: true
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 0
+          nullRate: 1
+  - name: store
+    description: Table store.
+    provenance: introspection
+    verified: false
+    source: pagila
+    table: store
+    kind: table
+    columns:
+      - name: store_id
+        description: Column store_id on store.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: store_id
+        nullable: false
+        isPrimaryKey: true
+        isUnique: true
+        profile:
+          distinctCount: 500
+          nullRate: 0
+          min: 0
+          max: 499
+      - name: manager_staff_id
+        description: Column manager_staff_id on store.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: manager_staff_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: true
+        profile:
+          distinctCount: 500
+          nullRate: 0
+          min: 0
+          max: 499
+      - name: address_id
+        description: Column address_id on store.
+        provenance: introspection
+        verified: false
+        dataType: integer
+        sourceColumn: address_id
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 325
+          nullRate: 0
+          min: 2
+          max: 604
+      - name: last_update
+        description: Column last_update on store.
+        provenance: introspection
+        verified: false
+        dataType: timestamp with time zone
+        sourceColumn: last_update
+        nullable: false
+        isPrimaryKey: false
+        isUnique: false
+        profile:
+          distinctCount: 1
+          nullRate: 0
+          min: 2022-02-15T09:57:12.000Z
+          max: 2022-02-15T09:57:12.000Z
+          topValues:
+            - value: 2022-02-15T09:57:12.000Z
+              count: 500
+relationships:
+  - name: address_address_city_id_fkey
+    description: Relationship from address to city discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: address
+    toModel: city
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: city_id
+        toColumn: city_id
+  - name: city_city_country_id_fkey
+    description: Relationship from city to country discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: city
+    toModel: country
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: country_id
+        toColumn: country_id
+  - name: customer_customer_address_id_fkey
+    description: Relationship from customer to address discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: customer
+    toModel: address
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: address_id
+        toColumn: address_id
+  - name: customer_customer_store_id_fkey
+    description: Relationship from customer to store discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: customer
+    toModel: store
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: store_id
+        toColumn: store_id
+  - name: film_actor_film_actor_actor_id_fkey
+    description: Relationship from film_actor to actor discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: film_actor
+    toModel: actor
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: actor_id
+        toColumn: actor_id
+  - name: film_actor_film_actor_film_id_fkey
+    description: Relationship from film_actor to film discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: film_actor
+    toModel: film
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: film_id
+        toColumn: film_id
+  - name: film_category_film_category_category_id_fkey
+    description: Relationship from film_category to category discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: film_category
+    toModel: category
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: category_id
+        toColumn: category_id
+  - name: film_category_film_category_film_id_fkey
+    description: Relationship from film_category to film discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: film_category
+    toModel: film
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: film_id
+        toColumn: film_id
+  - name: film_film_language_id_fkey
+    description: Relationship from film to language discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: film
+    toModel: language
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: language_id
+        toColumn: language_id
+  - name: film_film_original_language_id_fkey
+    description: Relationship from film to language discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: film
+    toModel: language
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: original_language_id
+        toColumn: language_id
+  - name: inventory_inventory_film_id_fkey
+    description: Relationship from inventory to film discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: inventory
+    toModel: film
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: film_id
+        toColumn: film_id
+  - name: inventory_inventory_store_id_fkey
+    description: Relationship from inventory to store discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: inventory
+    toModel: store
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: store_id
+        toColumn: store_id
+  - name: payment_p2022_01_payment_p2022_01_customer_id_fkey
+    description: Relationship from payment_p2022_01 to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_01
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: payment_p2022_01_payment_p2022_01_rental_id_fkey
+    description: Relationship from payment_p2022_01 to rental discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_01
+    toModel: rental
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: rental_id
+        toColumn: rental_id
+  - name: payment_p2022_01_payment_p2022_01_staff_id_fkey
+    description: Relationship from payment_p2022_01 to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_01
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: payment_p2022_02_payment_p2022_02_customer_id_fkey
+    description: Relationship from payment_p2022_02 to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_02
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: payment_p2022_02_payment_p2022_02_rental_id_fkey
+    description: Relationship from payment_p2022_02 to rental discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_02
+    toModel: rental
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: rental_id
+        toColumn: rental_id
+  - name: payment_p2022_02_payment_p2022_02_staff_id_fkey
+    description: Relationship from payment_p2022_02 to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_02
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: payment_p2022_03_payment_p2022_03_customer_id_fkey
+    description: Relationship from payment_p2022_03 to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_03
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: payment_p2022_03_payment_p2022_03_rental_id_fkey
+    description: Relationship from payment_p2022_03 to rental discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_03
+    toModel: rental
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: rental_id
+        toColumn: rental_id
+  - name: payment_p2022_03_payment_p2022_03_staff_id_fkey
+    description: Relationship from payment_p2022_03 to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_03
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: payment_p2022_04_payment_p2022_04_customer_id_fkey
+    description: Relationship from payment_p2022_04 to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_04
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: payment_p2022_04_payment_p2022_04_rental_id_fkey
+    description: Relationship from payment_p2022_04 to rental discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_04
+    toModel: rental
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: rental_id
+        toColumn: rental_id
+  - name: payment_p2022_04_payment_p2022_04_staff_id_fkey
+    description: Relationship from payment_p2022_04 to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_04
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: payment_p2022_05_payment_p2022_05_customer_id_fkey
+    description: Relationship from payment_p2022_05 to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_05
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: payment_p2022_05_payment_p2022_05_rental_id_fkey
+    description: Relationship from payment_p2022_05 to rental discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_05
+    toModel: rental
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: rental_id
+        toColumn: rental_id
+  - name: payment_p2022_05_payment_p2022_05_staff_id_fkey
+    description: Relationship from payment_p2022_05 to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_05
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: payment_p2022_06_payment_p2022_06_customer_id_fkey
+    description: Relationship from payment_p2022_06 to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_06
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: payment_p2022_06_payment_p2022_06_rental_id_fkey
+    description: Relationship from payment_p2022_06 to rental discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_06
+    toModel: rental
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: rental_id
+        toColumn: rental_id
+  - name: payment_p2022_06_payment_p2022_06_staff_id_fkey
+    description: Relationship from payment_p2022_06 to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: payment_p2022_06
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: rental_rental_customer_id_fkey
+    description: Relationship from rental to customer discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: rental
+    toModel: customer
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: customer_id
+        toColumn: customer_id
+  - name: rental_rental_inventory_id_fkey
+    description: Relationship from rental to inventory discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: rental
+    toModel: inventory
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: inventory_id
+        toColumn: inventory_id
+  - name: rental_rental_staff_id_fkey
+    description: Relationship from rental to staff discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: rental
+    toModel: staff
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: staff_id
+        toColumn: staff_id
+  - name: staff_staff_address_id_fkey
+    description: Relationship from staff to address discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: staff
+    toModel: address
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: address_id
+        toColumn: address_id
+  - name: staff_staff_store_id_fkey
+    description: Relationship from staff to store discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: staff
+    toModel: store
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: store_id
+        toColumn: store_id
+  - name: store_store_address_id_fkey
+    description: Relationship from store to address discovered by introspection.
+    provenance: introspection
+    verified: false
+    fromModel: store
+    toModel: address
+    cardinality: many-to-one
+    joinKeys:
+      - fromColumn: address_id
+        toColumn: address_id
+metrics: []
+views: []
+cubes: []

@@ -1,0 +1,8 @@
+# Ship only the built output.
+src/**
+scripts/**
+tsconfig.json
+node_modules/**
+!dist/**
+**/*.map
+.gitignore
