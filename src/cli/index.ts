@@ -13,6 +13,7 @@ import { bootstrapMdl } from '../semantic/bootstrap.js';
 import { buildPlan, dialectFor } from '../governance/gate.js';
 import { AuditLog } from '../audit/log.js';
 import { executeWithAudit } from '../audit/execution.js';
+import { loadEnvFile } from '../config/env-file.js';
 import { SemanticRegistry } from '../semantic/registry.js';
 import { ExecutionMemoryIndex } from '../memory/index.js';
 import { toToolErrorPayload } from '../mcp/errors.js';
@@ -52,10 +53,14 @@ Run "dsm <command> --help" for command-specific options.
 `;
 
 const HELP = {
-    serve: `Usage: dsm serve [--config <path>] [--check] [--json]
+    serve: `Usage: dsm serve [--config <path>] [--env-file <path>] [--check] [--json]
 
 Starts the MCP stdio server. --check validates configuration, semantic artifacts,
 audit storage, and source connectivity, then exits.
+
+--env-file loads \${VARIABLE} values used by the config from a .env file, so
+credentials stay out of MCP client config. Variables already set in the
+environment win.
 `,
     lint: `Usage: dsm mdl lint --source <name> --file <path> [--config <path>] [--json]
 
@@ -290,12 +295,19 @@ async function runAsk(argv: string[]): Promise<number> {
 
 async function runServe(argv: string[]): Promise<number> {
     const parsed = parseArguments(argv);
-    assertKnownOptions(parsed, ['config', 'check', 'json', 'help']);
+    assertKnownOptions(parsed, ['config', 'check', 'json', 'help', 'env-file']);
     if (hasOption(parsed, 'help')) {
         writeStdout(HELP.serve);
         return 0;
     }
     rejectPositionals(parsed, 'serve');
+
+    // Applied before the config is read, so ${VAR} references resolve. Clients
+    // other than the VS Code extension have no .env concept of their own.
+    const envFile = optionalString(parsed, 'env-file');
+    if (envFile) {
+        loadEnvFile(envFile);
+    }
 
     const configPath = optionalString(parsed, 'config');
     if (!hasOption(parsed, 'check')) {

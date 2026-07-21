@@ -1,0 +1,20 @@
+{
+  "principal": "demo-analyst",
+  "semantic": { "path": "./semantic" },
+  "audit": { "path": "./demo/audit.jsonl" },
+  "limits": { "maxResultBytes": 10485760, "timeoutMs": 30000 },
+  "sources": [
+    {
+      "name": "pagila",
+      "type": "postgres",
+      "description": "Pagila DVD-rental sample database",
+      "options": { "host": "127.0.0.1", "port": 55432, "user": "postgres", "password": "dsm_test_pw", "database": "pagila" }
+    },
+    {
+      "name": "sakila",
+      "type": "mysql",
+      "description": "Sakila DVD-rental sample database",
+      "options": { "host": "127.0.0.1", "port": 53306, "user": "dsm", "password": "dsm_test_pw", "database": "sakila" }
+    }
+  ]
+}
